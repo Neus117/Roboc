@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>Roboc.App</RootNamespace>
+    <AssemblyName>Roboc</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>..\..\assets\icons\Roboc.ico</ApplicationIcon>
+
+    <!--
+      Portable single-file by default, so a plain `dotnet publish -c Release`
+      produces a working deliverable.
+
+      NativeAOT would start faster (roughly 30-50 ms against the 95-123 ms
+      measured for this configuration) but its platform linker requires the
+      Visual Studio C++ build tools, which are not installed here. Leaving
+      PublishAot=true would make the default publish command fail with
+      "Platform linker not found", so the choice is made explicitly rather than
+      left as a build-breaking default. Set -p:PublishAot=true on the command
+      line once the toolchain is present.
+    -->
+    <PublishAot>false</PublishAot>
+
+    <OptimizationPreference>Speed</OptimizationPreference>
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+
+  <!--
+    Portable-packaging properties apply only when a runtime identifier is given,
+    i.e. during publish.
+
+    Setting SelfContained unconditionally also changed what a plain `dotnet build`
+    produced: the output moved to a RID-specific folder while the framework-
+    dependent copy at the old path stayed behind. Running that stale binary
+    against freshly edited source is a confusing way to lose an afternoon: the
+    build reports success and the behaviour never changes.
+  -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>partial</TrimMode>
+    <!--
+      Required to create .lnk shortcuts for the SendTo menu. Trimming disables
+      built-in COM by default, and the failure surfaces as NotSupportedException
+      at the call site rather than at build time.
+    -->
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Roboc.Core\Roboc.Core.csproj" />
+  </ItemGroup>
+
+
+
+</Project>

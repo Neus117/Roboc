@@ -1,0 +1,17 @@
+bin/
+obj/
+artifacts/
+publish/
+.dotnet/
+*.user
+*.suo
+.vs/
+.idea/
+
+# Benchmark scratch. These hold hundreds of thousands of files between runs;
+# run-bench.ps1 cleans its scratch at the end, but a killed run does not.
+scripts/corpus/
+scripts/out/
+scripts/scratch/
+scripts/run/
+scripts/results/

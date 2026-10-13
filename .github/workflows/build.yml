@@ -1,0 +1,95 @@
+# Roboc — 构建与验证
+#
+# 这个项目有两样东西值得每次推送自动跑一遍：
+#   1. --selftest 的 23 项原生互操作检查
+#   2. 接线检查（声明了却无人读取的配置项）
+#
+# 两者都是纯本地的，不需要网络，也不需要管理员权限。
+
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    # windows-2025 是当前带 .NET 10 SDK 的镜像。若它尚未普遍可用，
+    # 退回 windows-latest 并在下一步用 actions/setup-dotnet 指定版本。
+    runs-on: windows-2025
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 显示 .NET 版本
+        run: dotnet --info
+
+      - name: 还原
+        run: dotnet restore Roboc.slnx
+
+      # 警告视为失败。
+      #
+      # 不是洁癖：这个项目有三个真缺陷（死字段、循环里的 stackalloc、
+      # 裁剪下不可用的序列化）在构建输出里躺了很久，写法一直是"3 个警告"。
+      # 一个不变的数字等于没有信息。见开发者文档第五节 F 类。
+      - name: 构建
+        run: dotnet build Roboc.slnx -c Release --no-restore -warnaserror
+
+      # 发布，而不是直接跑 bin 下的产物。
+      #
+      # --selftest 会真的创建目录、写文件、建硬链接、设重解析点，
+      # 而裁剪与单文件发布可能改变这些调用的行为——发布产物才是要验的东西。
+      - name: 发布
+        run: >
+          dotnet publish src/Roboc.App/Roboc.App.csproj
+          -c Release --no-restore
+          -o artifacts/ci
+
+      - name: 自检
+        run: artifacts/ci/Roboc.exe --selftest --scratch "${{ runner.temp }}\roboc-selftest"
+
+      # 接线检查：找出"声明了却从未被读取"的配置项，
+      # 以及命令行标志未注册进 Args.TakesValue 的情况。
+      # 第一次运行就找出了 --export-reg。
+      - name: 接线检查
+        shell: pwsh
+        run: ./scripts/check-wiring.ps1 -Root .
+
+      - name: 图标完整性
+        shell: pwsh
+        run: |
+          # 菜单图标是注册表动词唯一能指向的东西，缺一个就是一个没有图标的菜单项。
+          $expected = @('copy','paste','delete','recycle','recycle_bin','settings','Roboc')
+          $missing = @()
+          foreach ($name in $expected) {
+            $path = "assets/icons/$name.ico"
+            if (-not (Test-Path $path)) { $missing += $path; continue }
+
+            # 每个图标必须含全部 8 个尺寸，且都带 PNG 魔数。
+            $bytes = [IO.File]::ReadAllBytes($path)
+            $count = [BitConverter]::ToUInt16($bytes, 4)
+            $sizes = @()
+            for ($i = 0; $i -lt $count; $i++) {
+              $entry = 6 + ($i * 16)
+              $sizes += if ($bytes[$entry] -eq 0) { 256 } else { [int]$bytes[$entry] }
+            }
+
+            $want = @(16, 20, 24, 32, 48, 64, 128, 256)
+            $gone = @($want | Where-Object { $_ -notin $sizes })
+            if ($gone.Count -gt 0) { $missing += "$path 缺尺寸 $($gone -join ',')" }
+          }
+
+          if ($missing.Count -gt 0) {
+            Write-Error "图标不完整：`n$($missing -join "`n")"
+            exit 1
+          }
+          Write-Host "7 个图标，每个 8 个尺寸，全部就位。"
+
+      - name: 保留便携包
+        uses: actions/upload-artifact@v4
+        with:
+          name: Roboc-portable
+          path: artifacts/ci
+          retention-days: 14

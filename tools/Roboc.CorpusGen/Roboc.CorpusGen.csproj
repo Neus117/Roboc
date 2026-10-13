@@ -1,0 +1,10 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Roboc.CorpusGen</RootNamespace>
+    <AssemblyName>Roboc.CorpusGen</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Roboc.Core\Roboc.Core.csproj" />
+  </ItemGroup>
+</Project>

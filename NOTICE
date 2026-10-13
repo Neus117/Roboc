@@ -1,0 +1,34 @@
+Roboc
+Copyright 2026 Neus117
+
+This product is licensed under the Apache License, Version 2.0.
+See the LICENSE file for the full text, or:
+    http://www.apache.org/licenses/LICENSE-2.0
+
+--------------------------------------------------------------------------
+Trademark
+--------------------------------------------------------------------------
+
+"Roboc" is the name of this project and is used to identify the original
+work and its official distributions.
+
+As stated in section 6 of the Apache License, the license does not grant
+permission to use trade names, trademarks, service marks, or product names
+of the licensor -- except as required for reasonable and customary use in
+describing the origin of the work.
+
+In plain terms:
+
+  You may  -- use, modify, and redistribute this code, including for
+              commercial purposes, and say that your work is based on Roboc.
+
+  You may not -- present a modified or redistributed build as the official
+                Roboc, or use the name in a way that suggests the original
+                author endorses or maintains it.
+
+--------------------------------------------------------------------------
+Third-party components
+--------------------------------------------------------------------------
+
+This project is built on the .NET platform and calls into Windows system
+libraries. No third-party source code is vendored into this repository.

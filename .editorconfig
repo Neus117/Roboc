@@ -1,0 +1,49 @@
+# Roboc — 编辑器与编码规则
+#
+# 这个仓库里最常见的两类低级故障都源于编码，所以规则写在这里而不是靠记忆。
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+
+# ------------------------------------------------------------------ C# 源码
+
+[*.cs]
+indent_size = 4
+
+# 换行必须显式声明。这个项目一度用 CRLF 与 LF 混排，diff 里整文件都成了改动。
+csharp_new_line_before_open_brace = all
+
+# ------------------------------------------------------------------ 脚本
+
+[*.ps1]
+indent_size = 4
+
+# PowerShell 5.1 对无 BOM 的 .ps1 按系统 ANSI 代码页解码，中文变乱码，
+# 进而引发一串看起来像语法错误的报错（"缺少右 }"、"Try 语句缺少 Catch"）。
+# 这个坑踩过两次，其中一次是编辑工具写回时丢失 BOM。
+#
+# 所以 .ps1 必须带 BOM —— 这一条不要改成 utf-8。
+charset = utf-8-bom
+
+[*.{json,jsonc}]
+indent_size = 2
+
+[*.{md,markdown}]
+# 文档里的中文与代码块结尾的空格有意义，不裁剪
+trim_trailing_whitespace = false
+
+[*.{csproj,props,targets,sln}]
+indent_size = 2
+
+# ------------------------------------------------------------------ 二进制
+
+[*.{ico,png,jpg,jpeg,gif,bmp}]
+# 二进制文件不参与任何文本规则
+insert_final_newline = false
+trim_trailing_whitespace = false

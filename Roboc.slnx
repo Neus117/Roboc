@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Roboc.App/Roboc.App.csproj" />
+    <Project Path="src/Roboc.Core/Roboc.Core.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Roboc.CorpusGen/Roboc.CorpusGen.csproj">
+      <Platform Project="x64" />
+    </Project>
+  </Folder>
+</Solution>

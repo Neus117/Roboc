@@ -1,0 +1,51 @@
+# Roboc — Git 属性
+#
+# 与 .editorconfig 分工：那份管编辑器怎么写，这份管 Git 怎么存与怎么比对。
+
+# ------------------------------------------------------------------ 换行
+#
+# 仓库内一律 CRLF。这是 Windows 专用项目，所有源码、脚本、文档都在 Windows 上
+# 编写与构建；normalize 成 LF 只会让本地工作区每次都显示整文件改动。
+
+* text=auto eol=crlf
+
+# ------------------------------------------------------------------ 二进制
+#
+# 显式声明，否则 Git 会尝试对图标做差异与合并 —— 两者对二进制都没有意义，
+# 且合并冲突会产生一个损坏的 .ico。
+
+*.ico  binary
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.bmp  binary
+*.exe  binary
+*.dll  binary
+*.pdb  binary
+
+# ------------------------------------------------------------------ 差异
+
+# .csproj 与 .props 的差异按 XML 高亮更易读
+*.csproj diff=xml
+*.props  diff=xml
+*.targets diff=xml
+
+# 基准结果文件只增不改，不参与合并
+scripts/results/*.txt merge=union
+
+# ------------------------------------------------------------------ 语言统计
+#
+# GitHub 的语言统计会把 HTML/CSS/JS 算进去，这个仓库里没有前端代码，
+# 但文档里嵌的示例可能被误判。显式标出文档不计入。
+
+docs/** linguist-documentation
+scripts/** linguist-vendored=false
+
+# ------------------------------------------------------------------ 导出
+#
+# git archive 时排除开发产物
+
+.gitattributes export-ignore
+.github/       export-ignore
+scripts/       export-ignore
