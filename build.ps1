@@ -99,9 +99,91 @@ if (Test-Path $iconSource) {
 
 Write-Host ""
 Write-Host "== 修正强制完整性标签 =="
-$before = (cmd /c icacls "$exe" 2>&1 | Select-String 'Mandatory' | Select-Object -First 1)
-Write-Host ("  之前: " + ($before -replace '\s+', ' '))
-cmd /c icacls "$exe" /setintegritylevel Medium 2>&1 | Out-Null
+
+# Sets the label, or explains why it could not.
+#
+# Why this is not one icacls call.
+#
+# The published executable has just been run -- by the self-test at the end of the
+# previous build, by a smoke test, by the context menu. Windows keeps an executed
+# image mapped for a while after the process exits, and while that mapping is alive
+# icacls reports "Access is denied" on that exact file -- not on its directory, not
+# on any other file in it, only on the one that was run. Re-running the build does
+# not clear it and neither does waiting.
+#
+# A file that has never been executed in this session has no such lock, so the label
+# is applied to a copy and the copy is moved over the original. Setting a label on a
+# copy and renaming it preserves the label, and the rename succeeds where the direct
+# write did not.
+function Set-MediumIntegrity([string]$path) {
+    # Relaxed for the whole function, and that is load-bearing.
+    #
+    # This script runs with $ErrorActionPreference = 'Stop'. icacls writes its
+    # refusal to stderr, and PowerShell turns a native command's stderr into a
+    # terminating error under that setting. Relaxing only the first call was not
+    # enough: the fallback path below makes two more, and the second one aborted
+    # the build from inside the very code written to handle the refusal.
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+
+    try {
+        if (-not (Test-Path $path)) { return $false }
+
+        # Relaxed for the duration of this function, and that is load-bearing.
+        #
+        # This script runs with $ErrorActionPreference = 'Stop'. icacls writes its refusal
+        # to stderr, and PowerShell turns a native command's stderr into a terminating
+        # error under that setting -- so the "Access is denied" case aborted the whole
+        # build at the first icacls call, and the fallback below never got a chance to
+        # run. The fallback exists precisely for that case.
+        $previous = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+
+        try {
+            cmd /c icacls "$path" /setintegritylevel Medium 2>&1 | Out-Null
+        } finally {
+            $ErrorActionPreference = $previous
+        }
+
+        $check = (cmd /c icacls "$path" 2>&1 | Out-String)
+        if ($check -match 'Medium Mandatory Level') { return $true }
+
+        # The direct write was refused. Try the copy-and-rename route.
+        $staging = "$path.new"
+        Remove-Item $staging -Force -ErrorAction SilentlyContinue
+        Copy-Item $path $staging -Force -ErrorAction SilentlyContinue
+        if (-not (Test-Path $staging)) { return $false }
+
+        cmd /c icacls "$staging" /setintegritylevel Medium 2>&1 | Out-Null
+
+        $copyCheck = (cmd /c icacls "$staging" 2>&1 | Out-String)
+        if ($copyCheck -notmatch 'Medium Mandatory Level') {
+            Remove-Item $staging -Force -ErrorAction SilentlyContinue
+            return $false
+        }
+
+        Remove-Item $path -Force -ErrorAction SilentlyContinue
+
+        if (Test-Path $path) {
+            cmd /c move /Y "$staging" "$path" 2>&1 | Out-Null
+        } else {
+            Move-Item $staging $path -Force -ErrorAction SilentlyContinue
+        }
+
+        $final = (cmd /c icacls "$path" 2>&1 | Out-String)
+        return $final -match 'Medium Mandatory Level'
+    } finally {
+        $ErrorActionPreference = $previous
+    }
+}
+
+if (Set-MediumIntegrity $exe) {
+    Write-Host "  Roboc.exe: Medium"
+} else {
+    Write-Host "  !! 无法为 Roboc.exe 设置完整性标签。" -ForegroundColor Red
+    Write-Host "     Low 完整性进程无法写 HKCU，右键菜单注册会被拒绝。" -ForegroundColor Red
+    Write-Host "     关闭所有 Roboc 进程后重试，或以管理员身份运行一次。" -ForegroundColor Red
+}
 
 # The corpus generator needs the same label, and for the same reason:
 # it is built by this same toolchain, so it inherits Low integrity, and a
@@ -111,12 +193,19 @@ cmd /c icacls "$exe" /setintegritylevel Medium 2>&1 | Out-Null
 # benchmark rather than a label missing from the binary.
 $genExe = Join-Path $PSScriptRoot 'tools\Roboc.CorpusGen\bin\Release\net10.0-windows\Roboc.CorpusGen.exe'
 if (Test-Path $genExe) {
-    icacls $genExe /setintegritylevel Medium | Out-Null
+    if (Set-MediumIntegrity $genExe) {
+        Write-Host "  Roboc.CorpusGen.exe: Medium"
+    } else {
+        Write-Host "  !! Roboc.CorpusGen.exe 的标签未能设置；基准语料生成会失败。" -ForegroundColor Red
+    }
 }
-$after = (cmd /c icacls "$exe" 2>&1 | Select-String 'Mandatory' | Select-Object -First 1)
-Write-Host ("  之后: " + ($after -replace '\s+', ' '))
 
-if ($after -notmatch 'Medium') {
+# Fail the build rather than hand over a deliverable that cannot register its menu.
+#
+# The label is not cosmetic: a Low-integrity process cannot write HKCU, so the
+# executable builds, runs, and then refuses to install the context menu with an
+# "access denied" that reads like a Windows permission problem. Better to stop here.
+if (-not (Set-MediumIntegrity $exe)) {
     throw "完整性标签未能修正为 Medium；这样的产物无法注册右键菜单"
 }
 
