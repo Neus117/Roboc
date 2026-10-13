@@ -68,6 +68,12 @@ jobs:
       #
       # 都不是风格问题：它们检查的缺陷**编译通过、运行无异常、只是不生效**，
       # 是本项目最难查的一类。
+      # 这条排在最前：项目加载失败时什么都构建不了，而"0 警告"和"构建干净"
+      # 在输出里长得一模一样。
+      - name: XML 注释检查
+        shell: pwsh
+        run: ./scripts/check-xml-comments.ps1 -Root .
+
       - name: BOM 检查
         shell: pwsh
         run: ./scripts/check-bom.ps1 -Root .

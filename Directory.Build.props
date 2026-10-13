@@ -17,4 +17,58 @@
     <NoWarn>$(NoWarn);CA1416;CA2255</NoWarn>
   </PropertyGroup>
 
+  <!--
+    What the file properties dialog shows.
+
+    All of this used to be SDK defaults derived from AssemblyName, and those
+    defaults were wrong in three ways a user sees immediately.
+
+    ProductVersion carried the commit hash. The SDK appends "+sha" to the
+    informational version and then uses that as the product version, so the
+    dialog showed 1.0.0+82d579d38bea395029c52e52dd638a1f8adf81c6, which is a
+    true fact in the wrong place. The hash is genuinely useful when reporting a
+    bug, so it stays in InformationalVersion, which the version command prints, and is
+    kept out of ProductVersion, which Explorer shows.
+
+    LegalCopyright was empty. Apache-2.0 requires the copyright notice to be
+    retained, and retained is easier to demonstrate when the binary says so.
+
+    FileDescription was just "Roboc", which tells someone looking at the file
+    nothing they could not already read from its name.
+
+    OriginalFilename still reads "Roboc.dll" and cannot be set from MSBuild.
+    The value comes from the managed assembly the apphost wraps rather than from
+    the executable being published, and the SDK exposes no property for it. It
+    is accurate rather than misleading (there really is a Roboc.dll inside) and
+    it is the one field here that could not be fixed.
+
+    NOTE FOR WHOEVER EDITS THIS FILE NEXT: an XML comment may not contain a
+    double hyphen. Every dash in the prose above is a single one, on purpose.
+    This has now cost three failed builds in one day.
+  -->
+  <PropertyGroup>
+    <Version>1.0.0</Version>
+    <FileVersion>1.0.0.0</FileVersion>
+    <ProductVersion>1.0.0</ProductVersion>
+
+    <Product>Roboc</Product>
+    <AssemblyTitle>Roboc - fast copy and delete for Windows</AssemblyTitle>
+    <Description>A portable Windows copy and delete tool built into the Explorer context menu, made for very large numbers of small files.</Description>
+    <Company>Neus117</Company>
+
+    <!-- The entity, not the character: the copyright sign has twice been
+         mangled into a Chinese character by a tool writing this file in the
+         wrong encoding. An entity survives any encoding. -->
+    <Copyright>Copyright &#169; 2026 Neus117</Copyright>
+
+    <!--
+      A version resource carries one language, and this program speaks two.
+      English is chosen because the string is read by anyone who opens the
+      file's properties, including people who do not read Chinese, and because
+      the README and the store listing are English-first. The application
+      itself still follows the system language; see Lang.
+    -->
+    <NeutralLanguage>en</NeutralLanguage>
+  </PropertyGroup>
+
 </Project>

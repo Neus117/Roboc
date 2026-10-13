@@ -22,6 +22,25 @@
     <PublishAot>false</PublishAot>
 
     <OptimizationPreference>Speed</OptimizationPreference>
+
+    <ProductVersion>1.0.0</ProductVersion>
+
+
+    <!--
+      Keep the commit hash out of the version resource, and still have it.
+
+      The SDK appends "+<sha>" to InformationalVersion from source control and
+      then uses that string as ProductVersion, so the properties dialog showed
+      "1.0.0+51fc3bb8422e3989938578a4d2c273d6790d86ec". Setting ProductVersion
+      by hand does not help: the version resource is built from
+      InformationalVersion, so the only lever is to stop the suffix being added
+      at all.
+
+      That would also have removed it from the version command, and the hash is
+      what makes a bug report answerable, so it is injected separately below as
+      assembly metadata. The dialog stays clean; the diagnosis stays possible.
+    -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <DebugType>embedded</DebugType>
   </PropertyGroup>
 
@@ -83,6 +102,21 @@
     <NoWarn>$(NoWarn);IL2026;IL2072;IL2075;IL2104</NoWarn>
   </PropertyGroup>
 
+  <!--
+    The commit hash, as assembly metadata rather than as part of the version.
+
+    IgnoreExitCode, and the empty fallback, because this must not break a build
+    in a directory that is not a git checkout, such as a source tarball.
+    A missing hash is a smaller problem than a build that will not run.
+  -->
+  <Target Name="AddCommitMetadata" BeforeTargets="GetAssemblyAttributes">
+    <Exec Command="git rev-parse HEAD" ConsoleToMSBuild="true" IgnoreExitCode="true" StandardOutputImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="GitCommitHash" />
+    </Exec>
+    <ItemGroup>
+      <AssemblyMetadata Include="Commit" Value="$(GitCommitHash)" />
+    </ItemGroup>
+  </Target>
   <ItemGroup>
     <ProjectReference Include="..\Roboc.Core\Roboc.Core.csproj" />
   </ItemGroup>

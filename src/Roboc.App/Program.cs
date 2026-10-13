@@ -255,10 +255,33 @@ internal static class Program
 
 internal static class ThisAssembly
 {
-    public static string Version =>
-        typeof(ThisAssembly).Assembly
-            .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
-            is [System.Reflection.AssemblyInformationalVersionAttribute attr, ..]
-            ? attr.InformationalVersion
-            : "0.0.0-dev";
+    /// <summary>
+    /// The version, with the commit when one is known.
+    ///
+    /// The hash arrives as assembly metadata rather than as part of the informational
+    /// version, because the SDK builds the file's version resource out of that string and
+    /// the properties dialog ended up showing "1.0.0+51fc3bb8422e..." -- a useful fact in
+    /// a place nobody wants it. Keeping the two separate lets the dialog stay clean and
+    /// the version command stay diagnostic.
+    /// </summary>
+    public static string Version
+    {
+        get
+        {
+            string version =
+                typeof(ThisAssembly).Assembly
+                    .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+                is [System.Reflection.AssemblyInformationalVersionAttribute attr, ..]
+                    ? attr.InformationalVersion
+                    : "0.0.0-dev";
+
+            string? commit = typeof(ThisAssembly).Assembly
+                .GetCustomAttributes(typeof(System.Reflection.AssemblyMetadataAttribute), false)
+                .OfType<System.Reflection.AssemblyMetadataAttribute>()
+                .FirstOrDefault(a => a.Key == "Commit")
+                ?.Value;
+
+            return string.IsNullOrWhiteSpace(commit) ? version : $"{version}+{commit}";
+        }
+    }
 }
