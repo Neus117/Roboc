@@ -1,8 +1,25 @@
-# Roboc
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/icons/Roboc-dark.png">
+    <img src="assets/icons/Roboc.png" width="88" height="88" alt="Roboc">
+  </picture>
+  &nbsp;&nbsp;
+  <img src="assets/icons/paste.png" width="88" height="88" alt="Paste">
+  &nbsp;&nbsp;
+  <img src="assets/icons/delete.png" width="88" height="88" alt="Delete">
+  &nbsp;&nbsp;
+  <img src="assets/icons/recycle.png" width="88" height="88" alt="Recycle">
+</p>
+<h1 align="center">Roboc</h1>
 
-[中文](README.zh-CN.md) · **English**
+<p align="center">
+  <a href="README.zh-CN.md">中文</a> · <strong>English</strong>
+</p>
 
-**A portable copy and delete tool for Windows**, built into the Explorer context menu.
+<p align="center">
+  <strong>A portable copy and delete tool for Windows</strong><br>
+  built into the Explorer context menu
+</p>
 
 **Made for very large numbers of small files.** Explorer stalls on the progress bar when a
 copy runs into tens of thousands of files; Roboc does the same work with multiple threads,

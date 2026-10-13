@@ -1,8 +1,26 @@
-# Roboc
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/icons/Roboc-dark.png">
+    <img src="assets/icons/Roboc.png" width="88" height="88" alt="Roboc">
+  </picture>
+  &nbsp;&nbsp;
+  <img src="assets/icons/paste.png" width="88" height="88" alt="粘贴">
+  &nbsp;&nbsp;
+  <img src="assets/icons/delete.png" width="88" height="88" alt="删除">
+  &nbsp;&nbsp;
+  <img src="assets/icons/recycle.png" width="88" height="88" alt="回收">
+</p>
 
-**中文** · [English](README.md)
+<h1 align="center">Roboc</h1>
 
-**一个便携的 Windows 复制 / 删除工具**，深度集成资源管理器右键菜单。
+<p align="center">
+  <strong>中文</strong> · <a href="README.md">English</a>
+</p>
+
+<p align="center">
+  <strong>一个便携的 Windows 复制 / 删除工具</strong><br>
+  深度集成资源管理器右键菜单
+</p>
 
 **为海量小文件而生。** 原生资源管理器复制几万个小文件时会卡在进度条上；Roboc 用多线程、块克隆与原子发布把同一件事做到接近磁盘上限。
 
