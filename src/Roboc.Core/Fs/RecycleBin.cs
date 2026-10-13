@@ -469,6 +469,26 @@ public static class RecycleBin
             return false;
         }
 
+        // A recycled directory also gets a marker written inside it.
+        //
+        // WriteMarker existed from the first commit but was never called, which is how a
+        // folder could sit in the bin, complete and correctly indexed, that the bin then
+        // reported as empty. The listing no longer depends on the marker -- the index is
+        // authoritative and Walk now consults it -- so this is no longer load-bearing for
+        // correctness. It is written for two other reasons.
+        //
+        // It is the fallback if the index is ever lost: OriginalPathOf still reads it.
+        // And it is written for the person who opens the folder to find out what it is
+        // doing in their recycle bin, which the index cannot tell them.
+        //
+        // Not rolled back on failure, unlike the index above: the item is already
+        // restorable through the index, so a missing marker is a loss of convenience
+        // rather than of the item.
+        if (DirectoryOps.IsExistingDirectory(target))
+        {
+            WriteMarker(target, source);
+        }
+
         storedPath = target;
         return true;
     }
@@ -841,6 +861,32 @@ public static class RecycleBin
                 items.Add(new Item(
                     entry.FullPath,
                     ReadMarkerOriginal(entry.FullPath) ?? OriginalPathOf(entry.FullPath, binRoot) ?? entry.FullPath,
+                    true,
+                    MeasureTree(entry.FullPath),
+                    ToLocalTime(entry.LastWriteTime)));
+
+                continue;
+            }
+
+            // A directory the index knows about is an item even without a marker.
+            //
+            // This is the defect that made "recycle a folder, then open the bin" report an
+            // empty bin. OriginalPathOf treats the index as authoritative and the marker as
+            // a fallback for records written before it existed -- but Walk only ever asked
+            // about the marker, so a recycled directory without one fell through to the
+            // recursion below, was treated as a container, and its contents were then tested
+            // one by one against the index, where none of them appear. The folder sat in the
+            // bin with every file intact while the program said there was nothing there.
+            //
+            // Asking OriginalPathOf is safe for any directory, because its last fallback
+            // matches only the mirrored layout, where the first component under the bin root
+            // is a drive letter followed by a separator -- which no ordinary subdirectory of
+            // a recycled folder is.
+            if (OriginalPathOf(entry.FullPath, binRoot) is { } recorded)
+            {
+                items.Add(new Item(
+                    entry.FullPath,
+                    recorded,
                     true,
                     MeasureTree(entry.FullPath),
                     ToLocalTime(entry.LastWriteTime)));

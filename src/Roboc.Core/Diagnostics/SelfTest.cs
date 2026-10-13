@@ -184,6 +184,7 @@ internal static class SelfTest
         Check("verification detects a corrupted copy", () => ProbeVerification(scratch));
         Check("leftover temp scan finds only staged files", () => ProbeLeftoverScan(scratch));
         Check("disk-full maps to its own error kind", ProbeDiskFullMapping);
+        Check("a recycled directory is listed back by the bin", () => ProbeRecycledDirectoryIsListed(scratch));
         }
         finally
         {
@@ -720,6 +721,65 @@ internal static class SelfTest
 
         var sharing = NativeError.CreateWin32("NtOpenFile", @"C:\x", NativeConst.ERROR_SHARING_VIOLATION);
         Assert(sharing.IsTransient, "SHARING_VIOLATION not classified as transient");
+    }
+
+    /// <summary>
+    /// Recycles a directory and checks the bin can list it.
+    ///
+    /// The defect this exists to catch: WriteMarker was written in the first commit and
+    /// never called, and Walk only recognised a discarded directory if it carried that
+    /// marker. So recycling a folder moved it, indexed it, and left it invisible -- the bin
+    /// reported itself empty while a complete folder sat inside it. Nothing failed, nothing
+    /// was logged, and the files were still on disk; the listing simply never mentioned
+    /// them.
+    ///
+    /// Two things are asserted, because they are two different mechanisms and either can
+    /// break on its own: the item is listed at all, and the folder carries the marker that
+    /// makes it self-describing if the index is ever lost.
+    /// </summary>
+    private static void ProbeRecycledDirectoryIsListed(string scratch)
+    {
+        string source = Path.Combine(scratch, "recycled-dir");
+        Directory.CreateDirectory(Path.Combine(source, "inner"));
+        File.WriteAllText(Path.Combine(source, "inner", "payload.txt"), "payload");
+
+        string extended = PathUtil.ToExtended(source);
+        string? binRoot = RecycleBin.RootFor(extended);
+
+        if (binRoot is null)
+        {
+            // No writable volume to recycle onto. Not a failure of the code under test.
+            return;
+        }
+
+        Assert(RecycleBin.TryPut(extended, out string stored, out int error),
+            $"recycling a directory failed with error {error}");
+
+        try
+        {
+            Assert(!Directory.Exists(source), "the source directory still exists after recycling");
+
+            List<RecycleBin.Item> items = RecycleBin.List(binRoot);
+
+            Assert(
+                items.Any(i => i.IsDirectory && i.OriginalPath.EndsWith("recycled-dir", StringComparison.OrdinalIgnoreCase)),
+                $"the bin listed {items.Count} items and did not include the directory just recycled");
+
+            Assert(
+                File.Exists(Path.Combine(PathUtil.ToDisplay(stored), RecycleBin.MarkerFileName)),
+                "the recycled directory carries no marker file, so it would be unrecognisable if the index were lost");
+        }
+        finally
+        {
+            // Take it straight back out of the bin.
+            //
+            // Moved rather than deleted: this probe runs against the user's real bin --
+            // there is no scratch volume to recycle onto -- so it must leave nothing
+            // behind. MoveFileEx back to the source path is the call the restore command
+            // itself makes.
+            Directory.CreateDirectory(Path.GetDirectoryName(source)!);
+            Kernel32.MoveFileEx(PathUtil.ToExtended(stored), extended, 0);
+        }
     }
 
     private static void Assert(bool condition, string message)
