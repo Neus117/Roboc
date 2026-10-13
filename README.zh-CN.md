@@ -1,14 +1,14 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/icons/Roboc-dark.png">
-    <img src="assets/icons/Roboc.png" width="88" height="88" alt="Roboc">
+    <img src="assets/icons/Roboc.png" width="220" height="220" alt="Roboc">
   </picture>
   &nbsp;&nbsp;
-  <img src="assets/icons/paste.png" width="88" height="88" alt="粘贴">
+  <img src="assets/icons/paste.png" width="220" height="220" alt="粘贴">
   &nbsp;&nbsp;
-  <img src="assets/icons/delete.png" width="88" height="88" alt="删除">
+  <img src="assets/icons/delete.png" width="220" height="220" alt="删除">
   &nbsp;&nbsp;
-  <img src="assets/icons/recycle.png" width="88" height="88" alt="回收">
+  <img src="assets/icons/recycle.png" width="220" height="220" alt="回收">
 </p>
 
 <h1 align="center">Roboc</h1>
