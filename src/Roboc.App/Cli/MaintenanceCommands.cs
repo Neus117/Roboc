@@ -21,15 +21,42 @@ internal static class MaintenanceCommands
     /// user is told which of the two things this press will do and can back out. A
     /// restore that runs without warning would be indistinguishable from a discard.
     /// </summary>
-    private static bool ConfirmRestore(List<string> inBin, int discardCount)
+    private static bool ConfirmRestore(List<string> inBin, List<string> originals, int discardCount)
     {
         var text = new System.Text.StringBuilder();
 
-        text.AppendLine(Lang.Pick($"♻️选中的 {inBin.Count:N0} 项在 Roboc 回收站里。", $"♻️{inBin.Count:N0} of the selected items are in the Roboc recycle bin."));
+        text.AppendLine(Lang.Pick($"♻️选中的 {inBin.Count:N0} 项在 Roboc 回收站里。原路径：", $"♻️{inBin.Count:N0} of the selected items are in the Roboc recycle bin. Original location:"));
         text.AppendLine();
-        text.AppendLine(Lang.Pick("回收站中的项目无法再次回收，可以取回它们原来的位置：", "Items already in the bin cannot be recycled again. They can be put back where they came from:"));
+
+        // Where each item is going, not just how many there are.
+        //
+        // "Put them back" is not enough to decide on when the answer is a path the user
+        // only half-remembers. The point of a confirmation is that it can be checked
+        // against what the user expected, and a count cannot be checked against anything.
+        //
+        // Ten, then a summary: a dialog is not a report, and a selection of two hundred
+        // files would otherwise push the buttons below the fold.
+        const int shown = 10;
+
+        for (int i = 0; i < originals.Count && i < shown; i++)
+        {
+            text.AppendLine("　" + originals[i]);
+        }
+
+        if (originals.Count > shown)
+        {
+            text.AppendLine(Lang.Pick($"　…另有 {originals.Count - shown} 项", $"  ...and {originals.Count - shown} more"));
+        }
+
+        // Reworded rather than padded so both lines are the same width on their own.
+        //
+        // The dialog centres its text, so two lines of different lengths sit at different
+        // left edges and the pair reads as ragged. Padding the shorter one fixed that and
+        // looked worse: the trailing spaces are invisible, so the fix was invisible too, and
+        // all that remained was a line of source that made no sense to read. Equal wording
+        // needs no explanation and survives being edited.
         text.AppendLine();
-        text.AppendLine(Lang.Pick("是：取回原位置", "Yes: put them back"));
+        text.AppendLine(Lang.Pick("是：取回其原位", "Yes: put them back"));
         text.AppendLine(Lang.Pick("否：什么都不做", "No: do nothing"));
 
         if (discardCount > 0)
@@ -121,6 +148,17 @@ internal static class MaintenanceCommands
         {
             if (RecycleBin.IsInsideAnyBin(PathUtil.ToExtended(path)))
             {
+                // The bin's own bookkeeping is not one of its contents. Selecting the index
+                // file and pressing 回收 used to produce a failure dialog in the middle of a
+                // batch of real items -- and because the batch stopped there, the rest of the
+                // selection was never restored and no folder was opened for the ones that had
+                // been. Skipped here, before the confirm dialog, so the dialog's count is the
+                // count of things that can actually be acted on.
+                if (RecycleBin.IsScaffolding(PathUtil.ToExtended(path)))
+                {
+                    continue;
+                }
+
                 inBin.Add(path);
             }
             else
@@ -131,7 +169,19 @@ internal static class MaintenanceCommands
 
         if (inBin.Count > 0)
         {
-            if (fromMenuEarly && !ConfirmRestore(inBin, toDiscard.Count))
+            // Resolved once, before anything moves, and reused afterwards.
+            //
+            // Restore clears the index record as it succeeds -- the record describes an item
+            // that is no longer in the bin -- and OriginalPathOf resolves the original path
+            // from that index. Asking a second time after the restore therefore always fails,
+            // and that is exactly what happened: the dialog named the right folder while the
+            // step that opens it was handed "original location unknown" and opened nothing.
+            //
+            // The diagnostic that found this printed originals=[（原位置未知）] on a restore
+            // that had just succeeded. Reading the source twice had not.
+            List<string> originals = OriginalsOf(inBin);
+
+            if (fromMenuEarly && !ConfirmRestore(inBin, originals, toDiscard.Count))
             {
                 return 0;
             }
@@ -143,12 +193,42 @@ internal static class MaintenanceCommands
                 ReportProblem(true, restoreErrors);
             }
 
+            // Opened here rather than inside Restore, and the distinction matters.
+            //
+            // RunRestoreQuietly invokes restore with --quiet, so inside that call fromMenu
+            // is false and the open-the-folder step over there never runs. The menu's own
+            // path is this one: 回收 performs the restore whenever part of the selection is
+            // already in the bin, and it then returns straight out of the branch below when
+            // there is nothing left to discard -- which is the ordinary case. The step has
+            // to live where that path can actually reach it.
+            if (fromMenuEarly && restoreErrors.Length == 0)
+            {
+                // Revealed, not merely opened: the folder alone does not say which of the
+                // things in it were just put back, and that is the only question the user
+                // has at this moment.
+                RevealRestored(originals);
+            }
+
             if (toDiscard.Count == 0)
             {
                 return restoreExit;
             }
+        }
 
-            paths = toDiscard;
+        // Outside the block above, and that placement is the fix for a real failure.
+        //
+        // The classification filters out the bin's own bookkeeping, but the result was only
+        // copied back to paths from inside "if (inBin.Count > 0)". Selecting nothing but the
+        // index file therefore left inBin empty, skipped that whole block, and carried the
+        // unfiltered list onward -- so the index file went to the recycling path after all and
+        // was refused with "already in the bin", which is the dialog that used to interrupt a
+        // batch. Assigning here means the filtered list is the one that continues, whether or
+        // not anything was restored first.
+        paths = toDiscard;
+
+        if (paths.Count == 0)
+        {
+            return 0;
         }
 
         // Brought up to the flat layout before anything is added to it, so a bin that
@@ -260,6 +340,16 @@ internal static class MaintenanceCommands
         var failures = new List<string>();
         var restoredPaths = new List<string>();
 
+        // Collisions the user has to decide, collected while the loop runs and put to them
+        // once afterwards. Asking per file would mean a dialog per file, and a folder that
+        // overlaps in fifty places would be fifty dialogs.
+        var conflicts = new List<(string Source, string Target)>();
+
+        // Entries moved into an existing folder by a merge, counted separately from whole
+        // items restored: "12 files merged into the folder" and "1 item restored" are
+        // different pieces of news and the report should not conflate them.
+        int mergedIntoRestore = 0;
+
         foreach (string path in paths)
         {
             string extended = PathUtil.ToExtended(path);
@@ -280,14 +370,51 @@ internal static class MaintenanceCommands
                 continue;
             }
 
-            // Refused, not overwritten: the file at the original location may be a
-            // newer version the user is working on, and a restore must never be the
-            // thing that destroys it.
+            // Something is already at the original location, and what happens next depends
+            // on what the two things are.
+            //
+            // Two directories merge. A user who recycles a folder, works in the original
+            // location for a while and then wants the folder back is the ordinary case, and
+            // refusing it makes them resolve the overlap by hand -- two hundred times, for a
+            // folder of two hundred files. Everything else is a collision the user has to
+            // decide, and is collected rather than resolved, because a decision made two
+            // hundred levels deep is one they never see.
             if (DirectoryOps.Exists(original))
             {
-                failures.Add(
-                    $"{PathUtil.ToDisplay(original)}\r\n" +
-                    Lang.Pick("  原位置已经有同名项目了。请先处理掉它，否则取回会覆盖掉它。", "  Something with that name is already in the original location. Deal with it first, or restoring will overwrite it."));
+                if (DirectoryOps.IsExistingDirectory(extended) &&
+                    DirectoryOps.IsExistingDirectory(original))
+                {
+                    List<(string Source, string Target)> found =
+                        RecycleBin.MergeConflicts(extended, original, out int movedInto);
+
+                    mergedIntoRestore += movedInto;
+                    conflicts.AddRange(found);
+
+                    if (found.Count == 0)
+                    {
+                        // Everything moved across, so the folder in the bin is now empty but
+                        // for the marker it arrived with -- MergeInto deliberately leaves that
+                        // behind rather than carrying it into the merged result, where it would
+                        // claim the user's own folder was a discarded item.
+                        //
+                        // Removing it here is what lets PruneEmpty take the empty folders
+                        // underneath. Without it the bin kept a shell holding nothing but a
+                        // 280-byte text file, and the listing showed that shell as a whole
+                        // restored item, at the original path, at 280 bytes.
+                        RecycleBin.ClearRecord(binRoot, extended);
+                        RecycleBin.RemoveMarker(extended);
+
+                        restored++;
+                        restoredPaths.Add(PathUtil.ToDisplay(original));
+                    }
+
+                    // The bin is left tidy either way: a merged folder that had subfolders
+                    // leaves those behind empty.
+                    RecycleBin.PruneEmpty(binRoot);
+                    continue;
+                }
+
+                conflicts.Add((extended, original));
                 continue;
             }
 
@@ -322,8 +449,10 @@ internal static class MaintenanceCommands
                 continue;
             }
 
-            // The sidecar describes an item that is no longer in the bin.
+            // Both records describe an item that is no longer in the bin. The marker is the
+            // third, and it sits inside the folder that was just put back -- see RemoveMarker.
             RecycleBin.ClearRecord(binRoot, extended);
+            RecycleBin.RemoveMarker(original);
 
             restored++;
             restoredPaths.Add(PathUtil.ToDisplay(original));
@@ -331,6 +460,81 @@ internal static class MaintenanceCommands
             // The scaffolding the item sat in is now empty more often than not, and
             // leaving it behind would make the bin accumulate empty drive letters.
             RecycleBin.PruneEmpty(binRoot);
+        }
+
+        // Collisions, put to the user once and applied to all of them.
+        //
+        // After the loop, not inside it: the dialog counts what it is asking about, and a
+        // count is only worth reading when it is the whole of it. It also means one answer
+        // covers a folder that overlaps in fifty places rather than fifty answers covering
+        // one place each.
+        if (conflicts.Count > 0)
+        {
+            // Two callers reach this and they want two different things.
+            //
+            // With --gui-errors, ask: the user is looking at the screen and the answer changes
+            // what happens next.
+            //
+            // Without it, tell them and stop. There is nobody to answer a question, but doing
+            // it silently is worse -- the files they asked for are still in the bin and
+            // nothing has said so.
+            //
+            // An earlier version tried to distinguish a menu invocation from a typed command
+            // by forwarding a marker from RunRestoreQuietly, on the reasoning that a user who
+            // had just answered a dialog should not be shown a notice about their own answer.
+            // The reasoning was wrong: the dialog they answered asked whether to restore, not
+            // what to do about a collision, and it is exactly the menu path -- where the
+            // notice was suppressed -- that left the user with no idea their files had been
+            // kept back. There is nothing to tell apart. --gui-errors already does it.
+            int answer;
+
+            if (fromMenu)
+            {
+                answer = AskOverwrite(ConflictScan.FromPairs(conflicts));
+            }
+            else
+            {
+                answer = 1;
+
+                ShowDialog(
+                    Lang.Pick(
+                        $"⚠️原路径已经存在 {conflicts.Count:N0} 个同名文件，默认保留回收站副本，\r\n你可以自行删除。",
+                        $"⚠️{conflicts.Count:N0} files with the same name already exist at the original location.\r\n"
+                        + "The recycle bin copies have been kept, and you can delete them yourself."),
+                    Lang.Pick("Roboc — 原路径已有同名文件", "Roboc — Name already exists at the original location"),
+                    warning: true,
+                    centre: true);
+            }
+
+            if (answer == 0)
+            {
+                foreach ((string source, string target) in conflicts)
+                {
+                    if (!RecycleBin.ReplaceWith(source, target))
+                    {
+                        failures.Add(
+                            $"{PathUtil.ToDisplay(target)}\r\n" +
+                            Lang.Pick("  替换失败：无法删除原位置的项目。", "  Replace failed: the item at the original location could not be removed."));
+                        continue;
+                    }
+
+                    string? conflictRoot = RecycleBin.RootFor(source);
+
+                    if (conflictRoot is not null)
+                    {
+                        RecycleBin.ClearRecord(conflictRoot, source);
+                        RecycleBin.RemoveMarker(target);
+                        RecycleBin.PruneEmpty(conflictRoot);
+                    }
+
+                    restored++;
+                    restoredPaths.Add(PathUtil.ToDisplay(target));
+                }
+            }
+
+            // answer 1 leaves every conflict in the bin -- the user asked to keep what is
+            // already there, and the recycled copies are the only other place they exist.
+            // answer 2 has already returned by way of AskOverwrite's own Cancel default.
         }
 
         if (fromMenu)
@@ -350,6 +554,12 @@ internal static class MaintenanceCommands
                 ReportProblem(true, text.ToString().TrimEnd());
             }
 
+            // Revealed after the event, not before it, and the item rather than the folder.
+            // The question at this moment is "where did it go", and a window showing the
+            // right folder still leaves the user to work out which of its contents arrived
+            // just now. Selecting it answers that without any searching.
+            RevealRestored(restoredPaths);
+
             return failures.Count == 0 ? 0 : 3;
         }
 
@@ -361,6 +571,19 @@ internal static class MaintenanceCommands
         if (!args.Flag("--quiet"))
         {
             Console.WriteLine(Lang.Pick($"取回完成：成功 {restored} 项，失败 {failures.Count} 项", $"Restore finished: {restored} succeeded, {failures.Count} failed"));
+
+            // Reported separately, because it is a different piece of news.
+            //
+            // "12 entries merged into the folder" and "1 item restored" say different things:
+            // the first that a folder already there now holds more, the second that something
+            // lost is back. A merge that finished cleanly also counts as a restored item, but
+            // a partial one does not -- its remainder is still in the bin. Without this line a
+            // restore that moved fifty files across reported "0 succeeded", and until it was
+            // wired up here the count was computed, incremented, and read by nothing at all.
+            if (mergedIntoRestore > 0)
+            {
+                Console.WriteLine(Lang.Pick($"其中 {mergedIntoRestore} 项合并进了已存在的文件夹。", $"{mergedIntoRestore} of them were merged into folders that already existed."));
+            }
         }
 
         return failures.Count == 0 ? 0 : 3;
@@ -905,25 +1128,6 @@ internal static class MaintenanceCommands
         _ => Lang.Pick($"错误码 {error}", $"error {error}"),
     };
 
-    private static long MeasureOne(string path)
-    {
-        string extended = PathUtil.ToExtended(path);
-
-        if (!DirectoryOps.Exists(extended))
-        {
-            return 0;
-        }
-
-        if (!DirectoryOps.IsExistingDirectory(extended))
-        {
-            return DirectoryOps.TryGetAttributes(extended, out WIN32_FILE_ATTRIBUTE_DATA data)
-                ? ((long)data.nFileSizeHigh << 32) | data.nFileSizeLow
-                : 0;
-        }
-
-        return RecycleBin.MeasureTree(extended);
-    }
-
     /// <summary>
     /// The warning shown before anything irreversible. Defaults to No, because a
     /// dialog that a stray Enter can confirm is not a warning.
@@ -1044,25 +1248,112 @@ internal static class MaintenanceCommands
     /// user can see what is held, how large it is, and delete from there. A dialog
     /// that only reports a total leaves them with nowhere to act.
     /// </summary>
+    /// <summary>
+    /// The original location of each item in the bin, in the order given.
+    ///
+    /// Shared by the confirmation that names them and the restore that performs them, so
+    /// the dialog cannot promise one path while the move goes to another.
+    /// </summary>
+    private static List<string> OriginalsOf(List<string> stored)
+    {
+        var originals = new List<string>(stored.Count);
+
+        foreach (string path in stored)
+        {
+            string extended = PathUtil.ToExtended(path);
+            string? binRoot = RecycleBin.RootFor(extended);
+
+            string? original = binRoot is null
+                ? null
+                : RecycleBin.OriginalPathOf(extended, binRoot);
+
+            originals.Add(original is null
+                ? Lang.Pick("（原位置未知）", "(original location unknown)")
+                : PathUtil.ToDisplay(original));
+        }
+
+        return originals;
+    }
+
+    /// <summary>
+    /// Opens each folder that received something and selects everything that went into it.
+    ///
+    /// Shell32.SelectInFolder is SHOpenFolderAndSelectItems, which takes an array of child
+    /// PIDLs -- so one call selects all of them, and it is the same call Explorer makes after
+    /// a paste and the same one the paste path here already used.
+    ///
+    /// An earlier version of this used "explorer.exe /select,path" instead, one process per
+    /// item. It worked and it was worse: /select takes a single item, so restoring twenty
+    /// files into one folder selected one of them, and it spawned a process per window to do
+    /// it. The capability was already in the project; the mistake was not looking.
+    /// </summary>
+    private static void RevealRestored(List<string> restoredPaths)
+    {
+        if (restoredPaths.Count == 0)
+        {
+            return;
+        }
+
+        // Grouped by parent, because a selection belongs to a window and a window belongs
+        // to a folder. Restoring into three folders opens three windows, each with its own
+        // items selected -- not one window and two folders' worth of confusion.
+        var byFolder = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (string path in restoredPaths)
+        {
+            string folder = Path.GetDirectoryName(path.TrimEnd('\\')) ?? path;
+
+            if (!byFolder.TryGetValue(folder, out List<string>? items))
+            {
+                items = [];
+                byFolder[folder] = items;
+            }
+
+            items.Add(path);
+        }
+
+        foreach ((string folder, List<string> items) in byFolder)
+        {
+            try
+            {
+                Shell32.SelectInFolder(folder, items);
+            }
+            catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+            {
+                // Revealing is a convenience on top of a convenience.
+            }
+        }
+    }
+
+    /// <summary>
+    /// Opens a folder in the shell, raising an existing window rather than starting a new one.</summary>
     private static void OpenFolder(string path)
     {
         try
         {
-            var startInfo = new System.Diagnostics.ProcessStartInfo
+            // ShellExecute, not a spawned explorer.exe.
+            //
+            // Both look like they open a folder and only one of them reliably does.
+            // Launching explorer.exe as an ordinary child process asks the shell to start a
+            // new instance of itself; when a shell is already running -- which is every
+            // interactive session -- that request is handed off and can be dropped with no
+            // error anywhere. ShellExecute is the documented way to ask the shell to open
+            // something, and it either raises the existing window or opens a new one.
+            //
+            // It also means the path is not quoted by hand, which is its own class of bug: a
+            // folder whose name contains a quote cannot be made safe by adding more quotes.
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
-                FileName = "explorer.exe",
-                Arguments = '"' + path + '"',
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-
-            System.Diagnostics.Process.Start(startInfo);
+                FileName = path,
+                UseShellExecute = true,
+            });
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
             // Opening a folder is a convenience; failing to is not worth an error.
         }
     }
+
 
     /// <summary>
     /// Asks what to do about files that are already at the destination.

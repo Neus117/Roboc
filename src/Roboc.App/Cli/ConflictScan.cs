@@ -163,6 +163,81 @@ internal static class ConflictScan
             newFiles, newFolders, mergedFolders);
     }
 
+    /// <summary>
+    /// Summarises conflicts that have already been found, in the same shape Run produces.
+    ///
+    /// Run answers "what will collide if I put these sources here", which needs one
+    /// destination. A restore cannot use it: a merge walks a recycled folder against the
+    /// folder it came from and collides wherever the two trees overlap, so the conflicts
+    /// belong to many destinations and are discovered one at a time.
+    ///
+    /// The alternative was a second dialog with a second vocabulary for the same question.
+    /// Building the Result instead means the user sees the paste wording they already know,
+    /// and there is one place that decides what "identical" means -- the same comparison
+    /// Run makes, size and last write time, applied to pairs already known to collide.
+    /// </summary>
+    internal static Result FromPairs(IReadOnlyList<(string Source, string Target)> pairs)
+    {
+        int identical = 0;
+        int different = 0;
+        int typeMismatch = 0;
+        long bytes = 0;
+
+        foreach ((string source, string target) in pairs)
+        {
+            bool sourceIsDirectory = DirectoryOps.IsExistingDirectory(PathUtil.ToExtended(source));
+            bool targetIsDirectory = DirectoryOps.IsExistingDirectory(PathUtil.ToExtended(target));
+
+            if (sourceIsDirectory != targetIsDirectory)
+            {
+                typeMismatch++;
+                continue;
+            }
+
+            if (sourceIsDirectory)
+            {
+                // Two directories colliding is not something a merge produces -- it recurses
+                // into that pair instead. Counted rather than ignored so that a future caller
+                // passing one through sees it named rather than silently dropped.
+                typeMismatch++;
+                continue;
+            }
+
+            if (!DirectoryOps.TryGetAttributes(
+                    PathUtil.ToExtended(source), out WIN32_FILE_ATTRIBUTE_DATA wanted) ||
+                !DirectoryOps.TryGetAttributes(
+                    PathUtil.ToExtended(target), out WIN32_FILE_ATTRIBUTE_DATA existing))
+            {
+                // One of them went away between the merge walk and this summary. Not counted
+                // as identical, because nothing verified that it is.
+                different++;
+                continue;
+            }
+
+            long sourceSize = ((long)wanted.nFileSizeHigh << 32) | wanted.nFileSizeLow;
+            long targetSize = ((long)existing.nFileSizeHigh << 32) | existing.nFileSizeLow;
+
+            bytes += sourceSize;
+
+            if (sourceSize == targetSize &&
+                wanted.ftLastWriteTime.ToLong() == existing.ftLastWriteTime.ToLong())
+            {
+                identical++;
+            }
+            else
+            {
+                different++;
+            }
+        }
+
+        // Complete is true by construction: these pairs were all found by a walk that
+        // finished. There are no new files or folders to report, because a merge has already
+        // moved every one of those into place before this is called.
+        return new Result(
+            identical, different, typeMismatch, bytes, pairs.Count, true,
+            NewFiles: 0, NewFolders: 0, MergedFolders: 0);
+    }
+
     private static bool Walk(
         string source, string target,
         Dictionary<string, Dictionary<string, Entry>> listing,

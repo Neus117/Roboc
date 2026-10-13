@@ -15,3 +15,6 @@ scripts/out/
 scripts/scratch/
 scripts/run/
 scripts/results/
+
+# 测试产物。见开发者文档「十四、测试卫生」。
+artifacts/scratch/

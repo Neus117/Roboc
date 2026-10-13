@@ -47,9 +47,9 @@
     This has now cost three failed builds in one day.
   -->
   <PropertyGroup>
-    <Version>1.0.0</Version>
-    <FileVersion>1.0.0.0</FileVersion>
-    <ProductVersion>1.0.0</ProductVersion>
+    <Version>1.0.1</Version>
+    <FileVersion>1.0.1.0</FileVersion>
+    <ProductVersion>1.0.1</ProductVersion>
 
     <Product>Roboc</Product>
     <AssemblyTitle>Roboc - fast copy and delete for Windows</AssemblyTitle>

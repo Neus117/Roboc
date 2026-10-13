@@ -1,4 +1,5 @@
 using Roboc.Core.Diagnostics;
+using Roboc.Core.Delete;
 using Roboc.Core.Interop;
 using Roboc.Core.Shell;
 using Roboc.Core.Model;
@@ -221,6 +222,62 @@ public static class RecycleBin
     {
         BinIndex.Remove(binRoot, storedExtended);
         RemoveSidecar(storedExtended);
+    }
+
+    /// <summary>
+    /// True for the files a bin keeps for itself rather than for the user.
+    ///
+    /// The index and the markers are how a bin describes its contents; they are not
+    /// contents. Selecting one and pressing 回收 asks to restore something that was never
+    /// recycled, and the restore correctly refuses -- but the refusal arrives as a dialog
+    /// in the middle of a batch, and a batch that stops to report a non-item is a batch the
+    /// user has to dismiss and start again.
+    ///
+    /// Reported rather than hidden, because a file that silently ignores a command is
+    /// worse than one that says it cannot.
+    /// </summary>
+    public static bool IsScaffolding(string extendedPath)
+    {
+        // EndsWith on the whole path, not GetFileName.
+        //
+        // The paths reaching here are extended (\\?\D:\...) and GetFileName was returning
+        // something that matched neither name, so the index file fell through to the
+        // recycling path and was refused with "already in the bin". EndsWith is what the rest
+        // of this file already uses to recognise these two names, and agreement with the code
+        // that writes them matters more than elegance here.
+        string trimmed = PathUtil.TrimTrailingSeparator(extendedPath);
+
+        return trimmed.EndsWith(BinIndex.BinFileName, StringComparison.OrdinalIgnoreCase)
+            || trimmed.EndsWith(MarkerFileName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Removes the marker a discarded directory carries.
+    ///
+    /// Called once the directory is back where it came from. The marker says "this folder is
+    /// in the recycle bin, and here is where it belongs" -- true while it is in the bin, and
+    /// false the moment it is not. Left behind, it is a small text file appearing inside a
+    /// folder the user has just restored, explaining that the folder is in a recycle bin it
+    /// is no longer in.
+    ///
+    /// Failures are swallowed: a marker that cannot be deleted is untidy, and refusing to
+    /// complete a restore over one would be a poor trade.
+    /// </summary>
+    public static void RemoveMarker(string restoredExtended)
+    {
+        string target = PathUtil.ToDisplay(restoredExtended + "\\" + MarkerFileName);
+
+        if (!DirectoryOps.IsExistingDirectory(restoredExtended))
+        {
+            return;
+        }
+
+        try
+        {
+            File.Delete(target);
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
     }
 
     public static void RemoveSidecar(string storedExtended)
@@ -789,6 +846,112 @@ public static class RecycleBin
     /// leaves its index behind, and code that tests for the directory instead keeps
     /// treating it as populated.
     /// </summary>
+    /// <summary>
+    /// Moves everything under <paramref name="source"/> into <paramref name="target"/>,
+    /// merging where the two overlap.
+    ///
+    /// <b>Why merging rather than refusing.</b> Restoring a folder used to be refused
+    /// outright whenever anything with that name was already at the original location. That
+    /// is the wrong answer for the common case: a user recycles a folder, works in the
+    /// original location for a while, and wants the folder back. Refusing makes them
+    /// resolve the overlap by hand -- for a folder with two hundred files, by hand two
+    /// hundred times.
+    ///
+    /// <b>Where the recursion stops.</b> An entry whose destination does not exist is moved
+    /// straight across. Where both sides are directories, the pair recurses. Everything else
+    /// is a conflict and is collected rather than resolved, because the decision belongs to
+    /// the user and a decision made two hundred levels deep is one they never see.
+    ///
+    /// <b>Returns having moved what it could.</b> A conflict part way through does not undo
+    /// the moves already made, and must not: those files are not in conflict with anything.
+    /// </summary>
+    private static void MergeInto(
+        string source, string target, List<(string Source, string Target)> conflicts, ref int moved)
+    {
+        var entries = new List<FindEntry>(64);
+
+        if (!DirectoryList.Enumerate(source, entries))
+        {
+            return;
+        }
+
+        foreach (FindEntry entry in entries)
+        {
+            if (entry.IsReparsePoint)
+            {
+                continue;
+            }
+
+            // The marker travels with the folder it describes, but only while the folder is
+            // whole. Once its contents are being merged into an existing folder, the marker
+            // would claim the merged result is a discarded item -- and the bin would then
+            // offer to take back a folder that is half the user's own work.
+            if (!entry.IsDirectory && string.Equals(entry.Name, MarkerFileName, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            string destination = target + "\\" + entry.Name;
+
+            if (!DirectoryOps.Exists(destination))
+            {
+                if (Kernel32.MoveFileEx(entry.FullPath, destination, 0) != 0)
+                {
+                    moved++;
+                }
+
+                continue;
+            }
+
+            if (entry.IsDirectory && DirectoryOps.IsExistingDirectory(destination))
+            {
+                MergeInto(entry.FullPath, destination, conflicts, ref moved);
+                continue;
+            }
+
+            conflicts.Add((entry.FullPath, destination));
+        }
+    }
+
+    /// <summary>
+    /// The entries a merge found in conflict, as (source, destination) pairs.
+    ///
+    /// Exposed so the caller can put the decision to the user with the same dialog the
+    /// paste path uses, rather than inventing a second vocabulary for the same question.
+    /// </summary>
+    public static List<(string Source, string Target)> MergeConflicts(
+        string source, string target, out int moved)
+    {
+        var conflicts = new List<(string Source, string Target)>();
+        int count = 0;
+
+        MergeInto(source, target, conflicts, ref count);
+        moved = count;
+
+        return conflicts;
+    }
+
+    /// <summary>
+    /// Moves one more item into place, replacing whatever is there.
+    ///
+    /// Used only after the user has said to replace. The destination is removed first
+    /// because MoveFileEx onto an existing file fails -- and it is removed with the fast
+    /// deleter so that replacing a directory with a file, or the other way round, works the
+    /// same as replacing like with like.
+    /// </summary>
+    public static bool ReplaceWith(string source, string target)
+    {
+        if (DirectoryOps.Exists(target))
+        {
+            if (!FastDeleter.TryDelete(
+                    target, DirectoryOps.IsExistingDirectory(target), out _, out _, out _))
+            {
+                return false;
+            }
+        }
+
+        return Kernel32.MoveFileEx(source, target, 0) != 0;
+    }
     public static bool HasItems(string binRoot)
     {
         try
@@ -836,6 +999,17 @@ public static class RecycleBin
             return;
         }
 
+        // The bin root is the container, never one of its contents.
+        //
+        // Every discarded directory carries its marker inside itself, so a marker sitting
+        // at the top of the bin belongs to no item -- it is a marker file that was itself
+        // recycled, like any other file. Read as a marker it made the whole bin look like a
+        // single discarded folder: the listing offered the entire recycle bin back as one
+        // item, at the original path of a text file inside it. One stray file was enough.
+        //
+        // Below the root the check stands, because that is exactly what it is for.
+        bool atRoot = string.Equals(directory, binRoot, StringComparison.OrdinalIgnoreCase);
+
         foreach (FindEntry entry in entries)
         {
             if (entry.IsReparsePoint)
@@ -855,7 +1029,7 @@ public static class RecycleBin
                 continue;
             }
 
-            if (HasMarker(entry.FullPath))
+            if (!atRoot && HasMarker(entry.FullPath))
             {
                 // A discarded directory: one item, not a container to descend into.
                 items.Add(new Item(
