@@ -1,14 +1,14 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/icons/Roboc-dark.png">
-    <img src="assets/icons/Roboc.png" width="160" height="160" alt="Roboc">
+    <img src="assets/icons/Roboc.png" width="128" height="128" alt="Roboc">
   </picture>
   &nbsp;&nbsp;
-  <img src="assets/icons/paste.png" width="160" height="160" alt="Paste">
+  <img src="assets/icons/paste.png" width="128" height="128" alt="Paste">
   &nbsp;&nbsp;
-  <img src="assets/icons/delete.png" width="160" height="160" alt="Delete">
+  <img src="assets/icons/delete.png" width="128" height="128" alt="Delete">
   &nbsp;&nbsp;
-  <img src="assets/icons/recycle.png" width="160" height="160" alt="Recycle">
+  <img src="assets/icons/recycle.png" width="128" height="128" alt="Recycle">
 </p>
 <h1 align="center">Roboc</h1>
 
