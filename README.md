@@ -1,163 +1,187 @@
 # Roboc
 
-**一个便携的 Windows 复制 / 删除工具**，深度集成资源管理器右键菜单。
+[中文](README.zh-CN.md) · **English**
 
-**为海量小文件而生。** 原生资源管理器复制几万个小文件时会卡在进度条上；Roboc 用多线程、块克隆与原子发布把同一件事做到接近磁盘上限。
+**A portable copy and delete tool for Windows**, built into the Explorer context menu.
 
-**便携绿色。** 解压即用，双击注册菜单；不想要了，设置里点一次卸载，再删掉文件夹——**不留任何痕迹**。
+**Made for very large numbers of small files.** Explorer stalls on the progress bar when a
+copy runs into tens of thousands of files; Roboc does the same work with multiple threads,
+block cloning and atomic publication, and runs at close to the limit of the disk.
+
+**Portable and self-contained.** Unpack it and it works; double-click once and the menu is
+registered; when you are done, remove it from the settings window and delete the folder.
+**It leaves nothing behind.**
 
 ---
 
-## 快速开始
+## Getting started
 
 ```
-1. 解压到任意文件夹
-2. 双击 Roboc.exe
+1. Unpack anywhere
+2. Double-click Roboc.exe
         ↓
-   自动注册右键菜单，弹出「Roboc 已就绪」
+   The context menu is registered and "Roboc is ready" appears
 ```
 
-**不需要安装，不需要管理员权限。**
+**Nothing to install, no administrator rights needed.**
 
-之后在资源管理器里选中文件或文件夹，右键即可看到：
+Select a file or folder in Explorer afterwards and right-click:
 
-<!--
-  截图占位。请把图片放到 docs/images/ 下，文件名与下方一致即可显示。
-  建议尺寸：宽度 1200px 以内，PNG，深色主题截图更贴合本程序的自绘配色。
--->
-
-| 右键菜单 | 复制进度 | 设置窗口 |
+| Context menu | Copy progress | Settings |
 |---|---|---|
-| ![右键菜单](docs/images/context-menu.png) | ![进度窗](docs/images/progress.png) | ![设置](docs/images/settings.png) |
+| ![Context menu](docs/images/context-menu.png) | ![Progress](docs/images/progress.png) | ![Settings](docs/images/settings.png) |
 
 <p align="center">
-  <em>六项菜单 · 速率曲线与剩余时间 · 每个开关标明收益与代价</em>
+  <em>Six entries · rate graph and time remaining · every switch states what it costs</em>
 </p>
 
-| 菜单项 | 作用 |
+| Entry | What it does |
 |---|---|
-| **Roboc 复制** | 放入 Roboc 剪贴板 |
-| **Roboc 粘贴** | 粘贴到当前目录（执行过复制后才出现） |
-| **Roboc 删除** | 彻底删除，不进任何回收站 |
-| **Roboc 回收** | 移入 `<卷>:\Roboc_bin\` |
-| **Roboc 回收站** | 打开回收站目录 |
-| **Roboc 设置** | 开关各项功能；**卸载也在这里** |
+| **Roboc → Copy** | Puts the selection on the Roboc clipboard |
+| **Roboc → Paste** | Pastes into the current folder (appears only after a copy) |
+| **Roboc → Delete** | Deletes permanently, bypassing every recycle bin |
+| **Roboc → Recycle** | Moves into `<volume>:\Roboc_bin\` |
+| **Roboc → Recycle bin** | Opens the bin folder |
+| **Roboc → Settings** | Turns features on and off; **Remove lives here too** |
 
 ---
 
-## 特性
+## Features
 
-### 默认启用
+### On by default
 
-| 特性 | 说明 |
+| Feature | What it means |
 |---|---|
-| **多线程复制** | 4–16 线程，按 CPU 核心数自动决定 |
-| **块克隆** | 同卷 NTFS/ReFS 上服务端复制，近乎瞬时 |
-| **硬链接保留** | 同一文件的多个名字在目标侧仍是链接，不展开成副本 |
-| **重解析点重建** | 符号链接、junction 在目标侧重建为链接 |
-| **断点续传** | 中断后重新执行同样的复制即可继续 |
-| **原子发布** | 目标路径**永不被观察到半成品** |
-| **进度窗** | 速率曲线、剩余时间、可暂停可取消 |
+| **Multi-threaded copying** | 4 to 16 threads, decided from the core count |
+| **Block cloning** | Server-side copy on the same NTFS or ReFS volume, effectively instant |
+| **Hard links preserved** | Several names for one file stay linked at the destination, not copied out |
+| **Reparse points rebuilt** | Symbolic links and junctions are recreated as links |
+| **Resumable** | Run the same copy again and it continues where it stopped |
+| **Atomic publication** | The destination path is **never seen half-written** |
+| **Progress window** | Rate graph, time remaining, pause and cancel |
 
-### 可选（默认关闭）
+### Optional, and off by default
 
-| 开关 | 代价 | 什么时候开 |
+| Switch | What it costs | When to turn it on |
 |---|---|---|
-| **保留数据流（`--ads`）** | +3.8% ~ 7.4% 吞吐 | 备份归档、搬移下载文件——否则"来自 Internet"标记会静默消失 |
-| **复制后校验（`--verify`）** | +54% 耗时 | 移动硬盘、U 盘、网络位置，或怀疑硬件有问题 |
+| **Keep data streams (`--ads`)** | 3.8% to 7.4% of throughput | Backups and moving downloaded files, or the "downloaded from the internet" mark disappears silently |
+| **Verify after copying (`--verify`)** | 54% longer | External disks, USB drives, network locations, or when hardware is suspect |
 
-**两项都在设置窗口里，各写明收益、代价与默认值。**
+**Both are in the settings window, each stating what it buys and what it costs.**
 
 ---
 
-## 性能
+## Performance
 
-实测（601 个文件 / 764 MB，三次取中位数）：
+Measured (601 files, 764 MB, median of three runs):
 
-| 操作 | 结果 |
+| Operation | Result |
 |---|---|
-| **海量小文件复制** | 与 `robocopy /MT:32` 最好成绩持平，**稳定性显著更好**（自身波动 7% vs 114%） |
-| **删除** | 比 PowerShell `Remove-Item` **快 2–3 倍**，比 `cmd rd` 快约 2 倍 |
+| **Very many small files** | Level with the best `robocopy /MT:32` time, and **substantially more consistent** (7% spread against 114%) |
+| **Delete** | **2 to 3 times faster** than PowerShell `Remove-Item`, about twice `cmd rd` |
 
-**大文件为什么比 robocopy 慢？** 因为它**在等数据真正落盘**，而 robocopy 写进缓存就返回。实测本机卷的持续写入速度是 **967 MB/s**，Roboc 跑到 **831–1034 MB/s**（物理极限的 86–107%），而 robocopy 自报 **11,100 MB/s**——超过该卷物理能力 11 倍。
+**Why large files are slower than robocopy.** Because it waits for the data to actually
+reach the disk; robocopy returns as soon as the write is cached. Sustained write speed on
+this machine measures **967 MB/s**, and Roboc reaches **831 to 1034 MB/s** (86% to 107% of
+the physical limit) while robocopy reports **11,100 MB/s** — eleven times what the volume
+can physically do.
 
-**这个等待是断点续传正确性的要求**：日志不得声称拥有断电后可能丢失的字节。
+**That wait is what makes resuming correct:** the journal must not claim to hold bytes that
+a power loss could take away.
 
 ---
 
-## 文档
+## Documentation
 
-| 文档 | 面向 |
+| Document | For |
 |---|---|
-| [使用说明](docs/使用说明.md) | **用户**——全部特性与开关、代价、常见问题 |
-| [开发者文档](docs/开发者文档.md) | **维护者**——架构、设计决策、维护规则、视觉规范、性能数据 |
+| [User Guide](docs/User%20Guide.md) | **Users** — every feature and switch, what each costs, common questions |
+| [Developer Guide](docs/Developer%20Guide.md) | **Maintainers** — architecture, design decisions, maintenance rules, visual specification, measurements |
+| [使用说明](docs/使用说明.md) · [开发者文档](docs/开发者文档.md) | The same two documents in Chinese |
 
 ---
 
-## 从源码构建
+## Building from source
 
-**要求**：.NET 10 SDK、Windows 11。
+**Requires** the .NET 10 SDK and Windows 11.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File build.ps1
 ```
 
-产物在 `artifacts/portable/`，随后自动运行 `--selftest`（23 项）。
+The result is in `artifacts/portable/`, and the script runs `--selftest` (23 checks)
+afterwards.
 
-**构建脚本会自动设置完整性标签**——DSH 等工具链派生的进程运行在 Low 完整性级别，而 Low IL 进程无法写入 `HKCU`，不打标签会导致所有注册表写入被拒。
-
----
-
-## 仓库结构
-
-```
-src/Roboc.App/           CLI、进度窗、弹窗、设置窗口
-src/Roboc.Core/          复制引擎、删除引擎、回收站、Shell 集成、互操作
-tools/Roboc.CorpusGen/   基准语料生成器
-assets/icons/            菜单图标（构建时复制到产物）
-scripts/                 基准与检查脚本
-docs/                    文档
-```
+**The build sets an integrity label on the executable**, and that is not optional: a process
+started by some toolchains runs at Low integrity, and a Low-integrity process cannot write
+to `HKCU` at all, so every registry write would be refused without it.
 
 ---
 
-## 已知限制
+## Repository layout
 
-| 项 | 状态 |
+```
+src/Roboc.App/           CLI, progress window, dialogs, settings window
+src/Roboc.Core/          Copy engine, delete engine, recycle bin, shell integration, interop
+tools/Roboc.CorpusGen/   Benchmark corpus generator
+assets/icons/            Menu icons (copied into the package at build time)
+scripts/                 Benchmarks and checks
+docs/                    Documentation
+```
+
+---
+
+## Known limitations
+
+| Item | Status |
 |---|---|
-| 加密文件（EFS） | 未专门支持 |
-| 稀疏文件 | 未专门支持 |
-| 硬链接数量 | 超过 100 万条后按副本处理并报告 |
+| Encrypted files (EFS) | Not specifically supported |
+| Sparse files | Not specifically supported |
+| Hard link count | Beyond one million, files are copied out and the fact is reported |
 
 ---
 
-## 设计原则
+## Design principles
 
-**接受一个参数却什么都不做，比拒绝它更糟。**
+**Accepting an argument and doing nothing with it is worse than refusing it.**
 
-拒绝只花一秒钟，**虚假的保证可能让你丢掉它本该保护的数据**。所以能做到但默认不做的（`--ads`、`--verify`）会明确说明代价；做不到的会直接拒绝执行。
+Refusing costs a second. **A false assurance can cost the data it was supposed to protect.**
+So the things this program can do but does not do by default (`--ads`, `--verify`) state
+their cost plainly, and the things it cannot do are refused outright.
 
-**破坏性操作绝不在不确定的输入上执行。** 删除有三道防线（驱动器相对路径、卷根、程序自身目录），**它们来自一次真实事故**。
+**Destructive operations never run on uncertain input.** Deletion has three guards (drive
+relative paths, volume roots, the program's own folder), and **they came from a real
+accident.**
 
 ---
 
-## 许可与商标
+## Licence and trademark
 
-**代码**：[Apache License 2.0](LICENSE) —— 可自由使用、修改、分发，**包括商业用途**。
+**Code**: [Apache License 2.0](LICENSE) — free to use, modify and redistribute, **including
+commercially**.
 
-**名称**：「Roboc」用于标识本项目的原始作品与官方发行版。**许可证第 6 条不授予商标使用权**，所以：
+**Name**: "Roboc" identifies the original work and its official distributions. **Section 6
+of the licence grants no trademark rights**, so:
 
-- ✅ 可以用这份代码做任何事，包括打包出售，并说明它基于 Roboc
-- ❌ 不能把修改版或再发行版当作**官方 Roboc**，也不能用这个名字暗示原作者为其背书
+- ✅ You may do anything with this code, including selling it, and say that it is based on Roboc
+- ❌ You may not present a modified or redistributed build as **official Roboc**, or use the
+  name in a way that suggests the original author endorses it
 
-**官方渠道**：本程序的唯一官方来源是 [GitHub 仓库](https://github.com/Neus117/Roboc)。
+**Official channels**: the only official source for this program is the
+[GitHub repository](https://github.com/Neus117/Roboc).
 
-<!-- TODO（上架后填写）：Microsoft Store 链接 / 其他官方渠道 -->
+<!-- TODO: Microsoft Store link once published -->
 
-**关于付费**：本程序**免费且开源**，任何官方渠道获得的版本**功能完全一致**。若将来出现付费版本，**那是在支持作者，不是在购买授权**。
+**About paying**: this program is **free and open source**, and every version from an official
+channel is **functionally identical**. If a paid version appears, **it is a way of supporting
+the author, not a licence purchase**.
 
-**请只从上述官方渠道获取。** 本许可证允许任何人使用、修改甚至转售这份代码，所以**其他渠道出现的同名或改名的程序，都不是本作者发布的**。对第三方分发，作者不提供支持，也无法对其安全性、完整性或行为负责。
+**Please obtain it only from the channels above.** The licence permits anyone to use, modify
+and even resell this code, so **any program with the same or a different name from any other
+source was not published by this author**. Third-party distributions get no support, and the
+author cannot answer for their safety, completeness or behaviour.
 
-> 如果你不确定手头的程序是否来自官方渠道，请以本仓库源码自行构建。
+> If you are unsure whether the copy you have is official, build it from the source in this
+> repository.
 
-详见 [NOTICE](NOTICE)。
+See [NOTICE](NOTICE) for details.
