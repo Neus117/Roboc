@@ -1,5 +1,6 @@
 using Roboc.Core.Diagnostics;
 using Roboc.Core.Interop;
+using Roboc.Core.Model;
 
 namespace Roboc.Core.Copy;
 
@@ -191,6 +192,6 @@ internal static class Verifier
 
     /// <summary>Human-readable description of a mismatch, for the error report.</summary>
     public static string Describe(long offset) => offset < 0
-        ? "内容不一致"
-        : $"内容在第 {offset:N0} 字节处开始不同";
+        ? Lang.Pick("内容不一致", "contents differ")
+        : Lang.Pick($"内容在第 {offset:N0} 字节处开始不同", $"contents first differ at byte {offset:N0}");
 }

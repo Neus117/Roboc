@@ -32,6 +32,15 @@ public sealed class RobocSettings
     /// <summary>Publish through a temporary file and an atomic rename.</summary>
     public bool AtomicPublish { get; set; } = true;
 
+    /// <summary>
+    /// "auto", "zh" or "en".
+    ///
+    /// Stored as a string rather than a bool so that a third language is a new value
+    /// rather than a new field, and so that a settings file written by a future version
+    /// is readable by this one -- an unknown value falls back to auto.
+    /// </summary>
+    public string Language { get; set; } = "auto";
+
     [JsonIgnore]
     public static string FilePath
     {
@@ -111,47 +120,110 @@ public sealed class RobocSettings
     /// printed by `roboc settings --list`, and so an option cannot be added to the
     /// settings class without someone having to decide what to tell the user about it.
     /// </summary>
-    public static IReadOnlyList<SettingInfo> Catalogue { get; } =
+    /// <summary>
+    /// Every switch the settings window shows, with what it buys and what it costs.
+    ///
+    /// Kept as data rather than as prose inside the window so the same text can be
+    /// printed by `roboc settings --list`, and so an option cannot be added to the
+    /// settings class without someone having to decide what to tell the user about it.
+    ///
+    /// <b>A method, not a property, and that is not a style choice.</b> A static property
+    /// is initialised once, on first access -- and the first access can happen before the
+    /// saved language preference has been read, in which case every label and every
+    /// explanation would be frozen in whichever language the machine happened to report
+    /// and would stay that way for the life of the process. Rebuilding the list on each
+    /// call costs five small objects and removes the ordering hazard entirely.
+    /// </summary>
+    public static IReadOnlyList<SettingInfo> Catalogue() =>
     [
         new(
             Key: nameof(RecreateHardLinks),
-            Label: "保留硬链接",
+            Label: Lang.Pick("保留硬链接", "Keep hard links"),
             Default: true,
-            Benefit: "同一文件的多个名字在目标侧仍是链接，不占额外空间，改一处三处同步变化。",
-            Cost: "每个多链接文件多一次系统调用。实测开销极小。",
-            Advice: "建议保持开启。关闭后链接会展开成独立副本——内容正确，但占用成倍增加，且改动不再同步。"),
+            Benefit: Lang.Pick(
+                "同一文件的多个名字在目标侧仍是链接，不占额外空间，改一处三处同步变化。",
+                "Several names for one file stay linked at the destination. No extra space, "
+                + "and editing the content once updates every name."),
+            Cost: Lang.Pick(
+                "每个多链接文件多一次系统调用。实测开销极小。",
+                "One extra system call per linked file. Measured cost is negligible."),
+            Advice: Lang.Pick(
+                "建议保持开启。关闭后链接会展开成独立副本——内容正确，但占用成倍增加，且改动不再同步。",
+                "Leave this on. Turned off, links become independent copies: the content is "
+                + "right, but the space multiplies and later edits stop propagating.")),
 
         new(
             Key: nameof(ResumeEnabled),
-            Label: "断点续传",
+            Label: Lang.Pick("断点续传", "Resume interrupted copies"),
             Default: true,
-            Benefit: "中断后重新执行同样的复制即可继续，不必从头再来。",
-            Cost: "每记录一次进度就要把这部分数据刷到磁盘，所以大文件复制的速度受限于磁盘而非缓存。",
-            Advice: "建议保持开启。若只是搬运可丢弃的临时数据、且在意速度，可以关闭。"),
+            Benefit: Lang.Pick(
+                "中断后重新执行同样的复制即可继续，不必从头再来。",
+                "Run the same copy again after an interruption and it continues where it "
+                + "stopped instead of starting over."),
+            Cost: Lang.Pick(
+                "每记录一次进度就要把这部分数据刷到磁盘，所以大文件复制的速度受限于磁盘而非缓存。",
+                "Progress is flushed to disk as it is recorded, so large copies run at the "
+                + "speed of the disk rather than of the cache."),
+            Advice: Lang.Pick(
+                "建议保持开启。若只是搬运可丢弃的临时数据、且在意速度，可以关闭。",
+                "Leave this on. Turn it off only when moving disposable data and speed "
+                + "matters more than being able to resume.")),
 
         new(
             Key: nameof(CopyAlternateDataStreams),
-            Label: "保留数据流（ADS）",
+            Label: Lang.Pick("保留数据流（ADS）", "Keep alternate data streams"),
             Default: false,
-            Benefit: "保留\"来自 Internet\"标记与 Office 元数据。浏览器下载、邮件附件、压缩包解压的文件几乎都带这个标记。",
-            Cost: "吞吐 −3.8% ~ 7.4%（每个文件多一次系统调用，实测 19 µs/文件）。",
-            Advice: "备份归档、搬移下载文件时开启；日常整理不必开。目标是 FAT32、U 盘或网络共享时开了也没用——那些文件系统无法承载数据流。"),
+            Benefit: Lang.Pick(
+                "保留「来自 Internet」标记与 Office 元数据。浏览器下载、邮件附件、压缩包解压的文件几乎都带这个标记。",
+                "Preserves the \u201cdownloaded from the internet\u201d mark and Office metadata. "
+                + "Files from a browser, a mail attachment or an extracted archive almost "
+                + "always carry the mark."),
+            Cost: Lang.Pick(
+                "吞吐 −3.8% ~ 7.4%（每个文件多一次系统调用，实测 19 µs/文件）。",
+                "Throughput −3.8% to 7.4% (one extra system call per file, measured at "
+                + "19 µs per file)."),
+            Advice: Lang.Pick(
+                "备份归档、搬移下载文件时开启；日常整理不必开。目标是 FAT32、U 盘或网络共享时开了也没用——那些文件系统无法承载数据流。",
+                "Turn on for backups and for moving downloaded files; not needed for "
+                + "ordinary tidying. It has no effect on FAT32, USB drives or network "
+                + "shares, which cannot carry streams at all.")),
 
         new(
             Key: nameof(VerifyChecksum),
-            Label: "复制后校验内容",
+            Label: Lang.Pick("复制后校验内容", "Verify contents after copying"),
             Default: false,
-            Benefit: "复制完成后把目标文件读回来逐字节比对。能发现内存位翻转、驱动缺陷、控制器写错扇区——这些都会产生大小正确、时间戳正确、内容却错了的文件。",
-            Cost: "耗时 +54%（源和目标各要读一遍）。",
-            Advice: "复制到移动硬盘、U 盘、网络位置，或备份不可替代的数据时开启。Windows 原生复制不做这个检查，robocopy 也不做。"),
+            Benefit: Lang.Pick(
+                "复制完成后把目标文件读回来逐字节比对。能发现内存位翻转、驱动缺陷、控制器写错扇区——这些都会产生大小正确、时间戳正确、内容却错了的文件。",
+                "Reads the destination back and compares it byte for byte. Catches flipped "
+                + "bits, driver faults and controllers writing the wrong sector -- all of "
+                + "which produce a file of the right size and the right timestamp with the "
+                + "wrong contents."),
+            Cost: Lang.Pick(
+                "耗时 +54%（源和目标各要读一遍）。",
+                "Takes 54% longer: both the source and the destination are read."),
+            Advice: Lang.Pick(
+                "复制到移动硬盘、U 盘、网络位置，或备份不可替代的数据时开启。Windows 原生复制不做这个检查，robocopy 也不做。",
+                "Turn on when copying to an external disk, a USB drive or a network "
+                + "location, or when backing up anything irreplaceable. Neither Windows' "
+                + "own copy nor robocopy checks this.")),
 
         new(
             Key: nameof(AtomicPublish),
-            Label: "原子发布",
+            Label: Lang.Pick("原子发布", "Publish atomically"),
             Default: true,
-            Benefit: "先写临时文件再改名，目标路径永不被观察到半成品。断电或崩溃不会留下损坏的目标文件。",
-            Cost: "每个文件多一次改名。对海量小文件有可测量的开销。",
-            Advice: "建议保持开启。关闭后写入更快，但中途失败会在目标留下不完整的文件。"),
+            Benefit: Lang.Pick(
+                "先写临时文件再改名，目标路径永不被观察到半成品。断电或崩溃不会留下损坏的目标文件。",
+                "Writes to a temporary file and renames it into place, so the destination "
+                + "path is never seen half-written. A power loss or a crash leaves no "
+                + "damaged file behind."),
+            Cost: Lang.Pick(
+                "每个文件多一次改名。对海量小文件有可测量的开销。",
+                "One extra rename per file, which is measurable across very many small "
+                + "files."),
+            Advice: Lang.Pick(
+                "建议保持开启。关闭后写入更快，但中途失败会在目标留下不完整的文件。",
+                "Leave this on. Turned off, writes are faster, but a failure part way "
+                + "through leaves an incomplete file at the destination.")),
     ];
 
     public bool Get(string key) => key switch

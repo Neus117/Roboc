@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Roboc.Core.Model;
 
 namespace Roboc.Core.Interop;
 
@@ -299,7 +300,7 @@ internal static partial class Kernel32
     {
         if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, out nint token) == 0)
         {
-            return "无法打开进程令牌";
+            return Lang.Pick("无法打开进程令牌", "cannot open the process token");
         }
 
         try
@@ -309,7 +310,7 @@ internal static partial class Kernel32
 
             if (size == 0 || size > 1024)
             {
-                return "无法查询完整性级别";
+                return Lang.Pick("无法查询完整性级别", "cannot query the integrity level");
             }
 
             var buffer = new byte[size];
@@ -318,7 +319,7 @@ internal static partial class Kernel32
             {
                 if (GetTokenInformation(token, TokenIntegrityLevel, p, size, out _) == 0)
                 {
-                    return "无法查询完整性级别";
+                    return Lang.Pick("无法查询完整性级别", "cannot query the integrity level");
                 }
 
                 // TOKEN_MANDATORY_LABEL { SID_AND_ATTRIBUTES Label; } -- the SID
@@ -328,7 +329,7 @@ internal static partial class Kernel32
 
                 if (count is null || *count == 0)
                 {
-                    return "完整性级别 SID 无效";
+                    return Lang.Pick("完整性级别 SID 无效", "the integrity level SID is not valid");
                 }
 
                 // GetSidSubAuthority returns a pointer to the DWORD, not the value.
@@ -338,11 +339,11 @@ internal static partial class Kernel32
                 return level switch
                 {
                     0x0000 => "Untrusted (0)",
-                    0x1000 => "Low (4096) -- 无法写 HKCU\\Software",
+                    0x1000 => Lang.Pick("Low (4096) -- 无法写 HKCU\\Software", "Low (4096) -- cannot write to HKCU\\Software"),
                     0x2000 => "Medium (8192)",
                     0x3000 => "High (12288)",
                     0x4000 => "System (16384)",
-                    _ => $"未知 ({level})",
+                    _ => Lang.Pick($"未知 ({level})", $"unknown ({level})"),
                 };
             }
         }

@@ -1,4 +1,5 @@
 using Roboc.Core.Interop;
+using Roboc.Core.Model;
 
 namespace Roboc.Core.Shell;
 
@@ -88,7 +89,7 @@ internal static class ClipboardFiles
         if (!opened)
         {
             Kernel32.GlobalFree(handle);
-            failure = "剪贴板正被其他程序占用，暂时无法写入。请稍后重试。";
+            failure = Lang.Pick("剪贴板正被其他程序占用，暂时无法写入。请稍后重试。", "Another program is holding the clipboard. Try again in a moment.");
             return false;
         }
 

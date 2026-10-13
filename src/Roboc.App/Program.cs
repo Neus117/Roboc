@@ -1,5 +1,6 @@
 using Roboc.App.Cli;
 using Roboc.Core.Diagnostics;
+using Roboc.Core.Model;
 using Roboc.Core.Shell;
 
 namespace Roboc.App;
@@ -36,6 +37,16 @@ internal static class Program
 
         try
         {
+            // Before anything can print, and before anything can build a menu label.
+            //
+            // This has to be first. Lang decides every user-visible string in the program,
+            // and a string resolved before this point is fixed for the life of the
+            // process -- so the saved preference is read here rather than wherever it
+            // happens to be convenient later. Loading it twice is deliberate: the cost is
+            // one small file read, and the alternative is a startup order that has to be
+            // reasoned about every time a new caller appears.
+            Lang.Apply(RobocSettings.Load().Language);
+
             // Cheap, and the alternative is a menu entry pointing at a path this
             // executable no longer occupies.
             //
@@ -185,11 +196,16 @@ internal static class Program
             if (registered <= 0)
             {
                 MessageDialog.Show(
-                    $"⚠️无法注册右键菜单：\r\n\r\n{(failure.Length > 0 ? failure : "未注册任何项")}\r\n\r\n" +
-                    "可以改用命令行使用：\r\n" +
-                    "　roboc copy --to <目标> <来源>\r\n" +
-                    "　roboc --help　查看全部命令",
-                    "Roboc — 注册失败",
+                    Lang.Pick(
+                        $"⚠️无法注册右键菜单：\r\n\r\n{(failure.Length > 0 ? failure : "未注册任何项")}\r\n\r\n"
+                        + "可以改用命令行使用：\r\n"
+                        + "　roboc copy --to <目标> <来源>\r\n"
+                        + "　roboc --help　查看全部命令",
+                        $"⚠️The context menu could not be registered:\r\n\r\n{(failure.Length > 0 ? failure : "nothing was registered")}\r\n\r\n"
+                        + "You can still use it from the command line:\r\n"
+                        + "  roboc copy --to <destination> <source>\r\n"
+                        + "  roboc --help   lists every command"),
+                    Lang.Pick("Roboc — 注册失败", "Roboc — Registration failed"),
                     DialogButtons.Acknowledge,
                     warning: true);
 
@@ -199,21 +215,38 @@ internal static class Program
 
         string folder = Path.GetDirectoryName(ShellCommand.ExecutablePath) ?? AppContext.BaseDirectory;
 
+        // Written as one paragraph per language rather than sentence by sentence.
+        //
+        // Concatenating translated fragments is how a translation ends up reading like a
+        // translation: word order differs, the punctuation differs, and a full stop that
+        // belongs to the end of a Chinese clause lands in the middle of an English one.
+        // One string per language keeps each readable on its own terms.
         string body = installed
-            ? "✅Roboc 已经可以使用。\r\n\r\n" +
-              "在资源管理器中选中文件或文件夹，右键即可看到 Roboc 菜单。"
-            : "✅已为你注册右键菜单：\r\n\r\n" +
-              "　复制　粘贴　删除　回收　回收站　设置\r\n\r\n" +
-              "在资源管理器中选中文件或文件夹，右键即可看到它们。\r\n\r\n" +
-              "「设置」里可以开关各项功能——每一项都写明了它的收益与代价，\r\n" +
-              "「卸载」也在那里。\r\n\r\n" +
-              "这个程序不需要安装。把整个文件夹放在哪里都行，\r\n" +
-              "不想用了执行一次「卸载」，再删掉文件夹即可。";
+            ? Lang.Pick(
+                "✅Roboc 已经可以使用。\r\n\r\n"
+                + "在资源管理器中选中文件或文件夹，右键即可看到 Roboc 菜单。",
+                "✅Roboc is ready to use.\r\n\r\n"
+                + "Select a file or folder in Explorer and right-click to find the Roboc menu.")
+            : Lang.Pick(
+                "✅已为你注册右键菜单：\r\n\r\n"
+                + "　复制　粘贴　删除　回收　回收站　设置\r\n\r\n"
+                + "在资源管理器中选中文件或文件夹，右键即可看到它们。\r\n\r\n"
+                + "「设置」里可以开关各项功能——每一项都写明了它的收益与代价，\r\n"
+                + "「卸载」也在那里。\r\n\r\n"
+                + "这个程序不需要安装。把整个文件夹放在哪里都行，\r\n"
+                + "不想用了执行一次「卸载」，再删掉文件夹即可。",
+                "✅The context menu has been registered:\r\n\r\n"
+                + "  Copy   Paste   Delete   Recycle   Recycle bin   Settings\r\n\r\n"
+                + "Select a file or folder in Explorer and right-click to find them.\r\n\r\n"
+                + "Settings turns individual features on and off, and states what each one\r\n"
+                + "costs and what it buys. Remove lives there too.\r\n\r\n"
+                + "There is nothing to install. Put the folder wherever you like;\r\n"
+                + "when you are done, run Remove once and delete the folder.");
 
         MessageDialog.Show(
             body + "\r\n\r\n" +
-            $"程序位置：\r\n　{folder}",
-            installed ? "Roboc" : "Roboc 已就绪",
+            Lang.Pick($"程序位置：\r\n　{folder}", $"Location:\r\n  {folder}"),
+            installed ? "Roboc" : Lang.Pick("Roboc 已就绪", "Roboc is ready"),
             DialogButtons.Acknowledge);
 
         return 0;

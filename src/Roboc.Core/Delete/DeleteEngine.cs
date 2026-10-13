@@ -111,7 +111,7 @@ public static class DeleteEngine
 
         if (sources.Count == 0)
         {
-            throw new FileNotFoundException("指定的项目都不存在，可能已经被删除或移动过了。");
+            throw new FileNotFoundException(Lang.Pick("指定的项目都不存在，可能已经被删除或移动过了。", "None of the given items exist; they may already have been deleted or moved."));
         }
 
         var stopwatch = Stopwatch.StartNew();

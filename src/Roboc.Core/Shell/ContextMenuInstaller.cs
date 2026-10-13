@@ -1,6 +1,7 @@
 using System.Text;
 using Microsoft.Win32;
 using Roboc.Core.Interop;
+using Roboc.Core.Model;
 
 namespace Roboc.Core.Shell;
 
@@ -57,17 +58,34 @@ public static class ContextMenuInstaller
         string Key, string Label, string Args, bool NeedsSelection, string IconFile,
         bool BackgroundTarget = false, string? AppliesTo = null);
 
-    private static readonly Verb[] Verbs =
+    /// <summary>
+    /// The menu entries, rebuilt on every access.
+    ///
+    /// <b>Not a static readonly field, and that is the whole point.</b> It was one, which
+    /// meant the six labels were resolved once, on the first touch of this type, and
+    /// frozen in whatever language was in force at that moment. Main calls SelfHeal
+    /// almost immediately, so that moment is always startup -- and re-registering the
+    /// menu after a language change therefore rewrote the same labels it had written
+    /// before. The setting appeared to do nothing at all.
+    ///
+    /// This is the second time this exact mistake has been made here; the first was
+    /// RobocSettings.Catalogue. Anything that calls Lang.Pick must be evaluated after the
+    /// language is known, and a static initialiser runs whenever the runtime chooses.
+    ///
+    /// Rebuilding costs six small structs per call, and this type is touched a handful of
+    /// times per process.
+    /// </summary>
+    private static Verb[] Verbs =>
     [
         // %1 rather than nothing: Explorer substitutes it and never appends the
         // selection, which is what every selection verb here got wrong. With
         // MultiSelectModel Single it is invoked once per selected file, and the
         // program reassembles the batch.
-        new("01copy",    "复制",     @"clipboard --gui-errors ""%1""",          true,  "copy.ico"),
-        new("02paste",   "粘贴",     @"paste --to ""%V"" --gui-errors",         false, "paste.ico", true),
-        new("03purge",   "删除", @"purge --gui-errors ""%1""",              true,  "delete.ico"),
-        new("04recycle", "回收",     @"recycle --gui-errors ""%1""",            true,  "recycle.ico"),
-        new("05reclaim", "回收站", "reclaim --gui-errors",                    false, "recycle_bin.ico"),
+        new("01copy",    Lang.Pick("复制", "Copy"),     @"clipboard --gui-errors ""%1""",          true,  "copy.ico"),
+        new("02paste",   Lang.Pick("粘贴", "Paste"),     @"paste --to ""%V"" --gui-errors",         false, "paste.ico", true),
+        new("03purge",   Lang.Pick("删除", "Delete"), @"purge --gui-errors ""%1""",              true,  "delete.ico"),
+        new("04recycle", Lang.Pick("回收", "Recycle"),     @"recycle --gui-errors ""%1""",            true,  "recycle.ico"),
+        new("05reclaim", Lang.Pick("回收站", "Recycle bin"), "reclaim --gui-errors",                    false, "recycle_bin.ico"),
 
         // Last, and it takes no selection. A context-menu entry cannot show whether a
         // switch is on, so four of them would be four entries that always look the same
@@ -75,7 +93,7 @@ public static class ContextMenuInstaller
         // shows every switch, what each costs and what each defaults to is fewer things
         // to learn -- and it is also where 卸载 lives, one step behind an explanation of
         // what it will and will not touch.
-        new("06settings", "设置",   "settings --gui-errors",                  false, "settings.ico"),
+        new("06settings", Lang.Pick("设置", "Settings"),   "settings --gui-errors",                  false, "settings.ico"),
 
         // 取回 is not its own entry.
         //
@@ -200,13 +218,13 @@ public static class ContextMenuInstaller
         {
             // A locked-down or virtualised registry is a real configuration, not a
             // crash. Say what could not be done and leave the rest alone.
-            failure = $"注册表写入被拒绝：{ex.Message}";
+            failure = Lang.Pick($"注册表写入被拒绝：{ex.Message}", $"registry write denied: {ex.Message}");
             log?.Invoke(failure);
             return -1;
         }
         catch (System.Security.SecurityException ex)
         {
-            failure = $"注册表写入被拒绝：{ex.Message}";
+            failure = Lang.Pick($"注册表写入被拒绝：{ex.Message}", $"registry write denied: {ex.Message}");
             log?.Invoke(failure);
             return -1;
         }
@@ -216,7 +234,7 @@ public static class ContextMenuInstaller
 
         NotifyShell();
 
-        log?.Invoke($"已注册 {written} 个右键菜单项（HKCU，无需管理员）");
+        log?.Invoke(Lang.Pick($"已注册 {written} 个右键菜单项（HKCU，无需管理员）", $"Registered {written} context-menu entries (HKCU, no administrator needed)"));
         return written;
     }
 
@@ -449,7 +467,7 @@ public static class ContextMenuInstaller
 
             if (!touchedAnything && !hasClipboardFiles)
             {
-                failure = "未找到已安装的菜单项";
+                failure = Lang.Pick("未找到已安装的菜单项", "no installed menu entries were found");
                 return false;
             }
 
@@ -654,7 +672,7 @@ public static class ContextMenuInstaller
 
             if (process is null)
             {
-                error = "无法启动 reg.exe";
+                error = Lang.Pick("无法启动 reg.exe", "could not start reg.exe");
                 return false;
             }
 
@@ -792,7 +810,9 @@ public static class ContextMenuInstaller
             }
         }
 
-        log?.Invoke($"[{(machine ? "HKLM" : "HKCU")}] 已移除 {removed} 个右键菜单项");
+        log?.Invoke(Lang.Pick(
+            $"[{hive}] 已移除 {removed} 个右键菜单项",
+            $"[{hive}] Removed {removed} context-menu entries"));
         return removed;
     }
 

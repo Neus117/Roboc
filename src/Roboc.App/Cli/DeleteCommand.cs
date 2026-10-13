@@ -70,10 +70,10 @@ internal static class DeleteCommand
 
             string phase = snapshot.CurrentItem is { Length: > 0 } item
                 ? (item.Length <= 46 ? item : "…" + item[^45..])
-                : "正在处理";
+                : Lang.Pick("正在处理", "Working");
 
             window.Report(
-                snapshot.HasTotals ? $"正在删除 {snapshot.FilesTotal:N0} 个项目" : "正在删除",
+                snapshot.HasTotals ? Lang.Pick($"正在删除 {snapshot.FilesTotal:N0} 个项目", $"Deleting {snapshot.FilesTotal:N0} items") : Lang.Pick("正在删除", "Deleting"),
                 phase,
                 remaining,
                 Math.Max(0, snapshot.BytesTotal - snapshot.BytesDone),
@@ -88,7 +88,7 @@ internal static class DeleteCommand
         List<string> sources = args.Positionals();
         if (sources.Count == 0)
         {
-            Console.Error.WriteLine("没有收到任何项目。");
+            Console.Error.WriteLine(Lang.Pick("没有收到任何项目。", "No items were received."));
             return 2;
         }
 
@@ -105,7 +105,7 @@ internal static class DeleteCommand
 
         if (!confirmed)
         {
-            Console.Error.WriteLine("为防止误操作，删除需要 --yes 参数确认。");
+            Console.Error.WriteLine(Lang.Pick("为防止误操作，删除需要 --yes 参数确认。", "Deletion needs --yes to confirm, so that it cannot happen by accident."));
             return 2;
         }
 
@@ -135,7 +135,7 @@ internal static class DeleteCommand
         bool fromMenu = args.Flag("--gui-errors");
 
         using ProgressWindow? progressWindow = fromMenu
-            ? ProgressWindow.Start("正在删除", "文件不会进入任何回收站", control)
+            ? ProgressWindow.Start(Lang.Pick("正在删除", "Deleting"), Lang.Pick("文件不会进入任何回收站", "Files do not go to any recycle bin"), control)
             : null;
         var progress = new ProgressAggregator();
 
@@ -157,14 +157,14 @@ internal static class DeleteCommand
         }
         catch (OperationCanceledException)
         {
-            Console.Error.WriteLine("操作已取消。");
+            Console.Error.WriteLine(Lang.Pick("操作已取消。", "Cancelled."));
             return 130;
         }
         catch (Exception ex)
         {
             // Guard refusals land here. They are the intended outcome for a
             // dangerous target, not a crash.
-            Console.Error.WriteLine($"操作失败：{ex.Message}");
+            Console.Error.WriteLine(Lang.Pick($"操作失败：{ex.Message}", $"Failed: {ex.Message}"));
             return 4;
         }
 

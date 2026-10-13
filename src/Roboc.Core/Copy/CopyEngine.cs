@@ -126,7 +126,7 @@ public static class CopyEngine
                 abortedOnDiskFull = true;
 
                 job.OnLog?.Invoke(
-                    "磁盘空间不足，任务已中止。已完成的项目保留，尚未处理的项目未开始。");
+                    Lang.Pick("磁盘空间不足，任务已中止。已完成的项目保留，尚未处理的项目未开始。", "Out of disk space; the job was stopped. Finished items are kept, unstarted ones were not begun."));
 
                 job.Control.Cancel();
             }
@@ -269,8 +269,8 @@ public static class CopyEngine
         if (Volatile.Read(ref linkMapFull) > 0)
         {
             job.OnLog?.Invoke(
-                $"硬链接映射已达上限 {LinkMapLimit:N0} 条，其后的多名称文件按独立副本复制。" +
-                "目标占用会大于源，内容不受影响。");
+                Lang.Pick($"硬链接映射已达上限 {LinkMapLimit:N0} 条，其后的多名称文件按独立副本复制。", $"The hard-link map reached its limit of {LinkMapLimit:N0}; files with several names after that point were copied as independent copies.") +
+                Lang.Pick("目标占用会大于源，内容不受影响。", "The destination will use more space than the source. The contents are unaffected."));
         }
 
         return new JobResult
@@ -300,14 +300,14 @@ public static class CopyEngine
 
             if (found.Count == 0)
             {
-                job.OnLog?.Invoke("未发现残留的暂存文件。");
+                job.OnLog?.Invoke(Lang.Pick("未发现残留的暂存文件。", "No leftover staging files were found."));
                 return;
             }
 
             long total = found.Sum(f => f.Size);
 
             job.OnLog?.Invoke(
-                $"发现 {found.Count} 个残留的暂存文件，共 {Describe(total)}（未删除，供你确认后再处理）：");
+                Lang.Pick($"发现 {found.Count} 个残留的暂存文件，共 {Describe(total)}（未删除，供你确认后再处理）：", $"Found {found.Count} leftover staging files, {Describe(total)} in total. They have not been deleted, so you can look before deciding:"));
 
             foreach (LeftoverTemp item in found.Take(20))
             {
@@ -316,7 +316,7 @@ public static class CopyEngine
 
             if (found.Count > 20)
             {
-                job.OnLog?.Invoke($"  …另有 {found.Count - 20} 个未列出");
+                job.OnLog?.Invoke($"  ...{found.Count - 20} more not listed");
             }
 
             // The line that turns a report into a remedy. Without it the user is told
@@ -324,11 +324,11 @@ public static class CopyEngine
             // no stated connection between the two -- so the obvious next move, retrying
             // after freeing space elsewhere, fails again for a reason nothing explained.
             job.OnLog?.Invoke(
-                $"这些是上一次传输留下的临时文件。确认无用后删除它们可释放 {Describe(total)}，然后重新执行复制。");
+                Lang.Pick($"这些是上一次传输留下的临时文件。确认无用后删除它们可释放 {Describe(total)}，然后重新执行复制。", $"These are temporary files left by an earlier transfer. Once you are satisfied they are of no use, deleting them frees {Describe(total)}; then run the copy again."));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
-            job.OnLog?.Invoke($"枚举残留暂存文件时出错：{ex.Message}");
+            job.OnLog?.Invoke(Lang.Pick($"枚举残留暂存文件时出错：{ex.Message}", $"Error while scanning for leftover staging files: {ex.Message}"));
         }
     }
 
@@ -920,7 +920,7 @@ public static class CopyEngine
 
         report(new JobError(
             ErrorKind.Verify, PathUtil.ToDisplay(destination), "Verify", 0,
-            $"复制后校验失败：{Verifier.Describe(offset)}（目标文件已保留，未删除）", 0));
+            Lang.Pick($"复制后校验失败：{Verifier.Describe(offset)}（目标文件已保留，未删除）", $"Verification failed after copying: {Verifier.Describe(offset)} (the destination file was kept, not deleted)"), 0));
     }
 
     /// <summary>
@@ -950,7 +950,9 @@ public static class CopyEngine
 
         report(new JobError(
             ErrorKind.Metadata, PathUtil.ToDisplay(destination), "AlternateStreams", error,
-            $"未复制的数据流：{string.Join("、", failed)}", 0));
+            Lang.Pick(
+                $"未复制的数据流：{string.Join("、", failed)}",
+                $"Streams not copied: {string.Join(", ", failed)}"), 0));
     }
 
     /// <summary>
@@ -1146,7 +1148,7 @@ public static class CopyEngine
             Reported = 0;
 
             // The window shows the name of what is being worked on. Nothing ever set
-            // it, so it read "正在准备…" for the entire operation.
+            // it, so it read Lang.Pick("正在准备…", "Preparing...") for the entire operation.
             _job.Progress.SetCurrentItem(source);
         }
 

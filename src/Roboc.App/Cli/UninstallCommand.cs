@@ -36,13 +36,23 @@ internal static class UninstallCommand
     /// </summary>
     public static int RunSettings(Args args)
     {
+        // Read before the window opens: the window applies a language change to the
+        // running process as soon as it is clicked, so afterwards there is no way to tell
+        // whether it changed.
+        string before = RobocSettings.Load().Language;
+
         SettingsOutcome outcome = SettingsWindow.Show();
 
         if (outcome != SettingsOutcome.Uninstall)
         {
-            if (outcome == SettingsOutcome.Saved && !args.Flag("--quiet"))
+            if (outcome == SettingsOutcome.Saved)
             {
-                Console.WriteLine("设置已保存。");
+                ReinstallMenuIfLanguageChanged(before);
+
+                if (!args.Flag("--quiet"))
+                {
+                    Console.WriteLine(Lang.Pick("设置已保存。", "Settings saved."));
+                }
             }
 
             return 0;
@@ -64,6 +74,39 @@ internal static class UninstallCommand
     }
 
     /// <summary>
+    /// Re-registers the context menu when the language was changed.
+    ///
+    /// The menu labels are written into the registry at install time, so they are fixed
+    /// in whichever language was in force at that moment. Nothing about a running
+    /// program can change them afterwards -- Explorer reads the registry, not the
+    /// settings file. Re-registering is the only way the menu follows the setting, and it
+    /// costs one pass over fifteen keys.
+    ///
+    /// Not re-registered when the menu was never installed: someone who only ever uses
+    /// the command line should not acquire a context menu by changing a preference.
+    /// </summary>
+    private static void ReinstallMenuIfLanguageChanged(string before)
+    {
+        string after = RobocSettings.Load().Language;
+
+        if (string.Equals(before, after, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (!ContextMenuInstaller.IsInstalled)
+        {
+            return;
+        }
+
+        try
+        {
+            ContextMenuInstaller.Install(ShellCommand.ExecutablePath, out _, null);
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+    }
+    /// <summary>
     /// The second question, stating what goes and what stays before either happens.
     ///
     /// The recycle bins are computed here rather than described vaguely, because the
@@ -74,11 +117,11 @@ internal static class UninstallCommand
     {
         var text = new System.Text.StringBuilder();
 
-        text.AppendLine("⚠️即将移除 Roboc：");
+        text.AppendLine(Lang.Pick("⚠️即将移除 Roboc：", "⚠️About to remove Roboc:"));
         text.AppendLine();
-        text.AppendLine("　✅ 右键菜单与发送到菜单");
-        text.AppendLine("　✅ 程序数据与设置");
-        text.AppendLine("　✅ 临时痕迹");
+        text.AppendLine(Lang.Pick("　✅ 右键菜单与发送到菜单", "  ✅ Context menu and Send To entry"));
+        text.AppendLine(Lang.Pick("　✅ 程序数据与设置", "  ✅ Program data and settings"));
+        text.AppendLine(Lang.Pick("　✅ 临时痕迹", "  ✅ Temporary traces"));
 
         var bins = new List<(string Root, long Bytes)>();
 
@@ -101,7 +144,7 @@ internal static class UninstallCommand
         if (bins.Count > 0)
         {
             text.AppendLine();
-            text.AppendLine("⚠️不会动你的回收站——里面是文件，不是程序数据：");
+            text.AppendLine(Lang.Pick("⚠️不会动你的回收站——里面是文件，不是程序数据：", "⚠️Your recycle bins will not be touched -- they hold files, not program data:"));
             text.AppendLine();
 
             foreach ((string root, long bytes) in bins)
@@ -112,19 +155,19 @@ internal static class UninstallCommand
             }
 
             text.AppendLine();
-            text.AppendLine("　要取回就打开它，不要了就自行删除。");
+            text.AppendLine(Lang.Pick("　要取回就打开它，不要了就自行删除。", "  Open them to get things back, or delete them yourself if you do not want them."));
         }
 
         string? directory = Path.GetDirectoryName(Environment.ProcessPath);
 
         text.AppendLine();
-        text.AppendLine("移除后，再删除程序文件夹即可彻底清除：");
+        text.AppendLine(Lang.Pick("移除后，再删除程序文件夹即可彻底清除：", "After that, deleting the program folder removes everything:"));
         text.AppendLine();
         text.AppendLine($"　{directory ?? AppContext.BaseDirectory}");
 
         return MessageDialog.Show(
             text.ToString().TrimEnd(),
-            "Roboc — 确认卸载",
+            Lang.Pick("Roboc — 确认卸载", "Roboc — Confirm removal"),
             DialogButtons.YesNo,
             warning: true) == 0;
     }
@@ -144,15 +187,15 @@ internal static class UninstallCommand
             if (!args.Flag("--keep-menu"))
             {
                 ContextMenuInstaller.Uninstall(null);
-                removed.Add("右键菜单（文件、文件夹、文件夹背景）");
+                removed.Add(Lang.Pick("右键菜单（文件、文件夹、文件夹背景）", "Context menu (files, folders, folder background)"));
             }
 
             SendToMenu.Uninstall(null);
-            removed.Add("发送到菜单");
+            removed.Add(Lang.Pick("发送到菜单", "Send To entry"));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            failed.Add($"移除 Shell 集成：{ex.Message}");
+            failed.Add(Lang.Pick($"移除 Shell 集成：{ex.Message}", $"removing shell integration: {ex.Message}"));
         }
 
         // ---------------------------------------------------------- files outside here
@@ -169,7 +212,7 @@ internal static class UninstallCommand
             try
             {
                 Directory.Delete(local, recursive: true);
-                removed.Add($"临时数据  {local}");
+                removed.Add(Lang.Pick($"临时数据  {local}", $"temporary data  {local}"));
             }
             catch (IOException ex) { failed.Add($"{local}：{ex.Message}"); }
             catch (UnauthorizedAccessException ex) { failed.Add($"{local}：{ex.Message}"); }
@@ -200,7 +243,7 @@ internal static class UninstallCommand
                     File.Delete(path);
                 }
 
-                removed.Add($"程序数据  {name}");
+                removed.Add(Lang.Pick($"程序数据  {name}", $"program data    {name}"));
             }
             catch (IOException ex) { failed.Add($"{name}：{ex.Message}"); }
             catch (UnauthorizedAccessException ex) { failed.Add($"{name}：{ex.Message}"); }
@@ -260,7 +303,7 @@ internal static class UninstallCommand
 
         if (removed.Count > 0)
         {
-            text.AppendLine("⚠️已清除以下内容：");
+            text.AppendLine(Lang.Pick("⚠️已清除以下内容：", "⚠️Removed:"));
             text.AppendLine();
 
             foreach (string line in removed)
@@ -273,7 +316,7 @@ internal static class UninstallCommand
 
         if (failed.Count > 0)
         {
-            text.AppendLine("⚠️以下内容未能清除：");
+            text.AppendLine(Lang.Pick("⚠️以下内容未能清除：", "⚠️Could not be removed:"));
             text.AppendLine();
 
             foreach (string line in failed)
@@ -286,7 +329,7 @@ internal static class UninstallCommand
 
         if (bins.Count > 0)
         {
-            text.AppendLine("⚠️回收站未动——里面是你的文件：");
+            text.AppendLine(Lang.Pick("⚠️回收站未动——里面是你的文件：", "⚠️Recycle bins untouched -- they hold your files:"));
             text.AppendLine();
 
             foreach ((string root, long bytes) in bins)
@@ -295,17 +338,17 @@ internal static class UninstallCommand
             }
 
             text.AppendLine();
-            text.AppendLine("　要取回就打开它，不要了就自行删除。");
+            text.AppendLine(Lang.Pick("　要取回就打开它，不要了就自行删除。", "  Open them to get things back, or delete them yourself if you do not want them."));
             text.AppendLine();
         }
 
-        text.AppendLine("现在删除这个文件夹即可彻底清除：");
+        text.AppendLine(Lang.Pick("现在删除这个文件夹即可彻底清除：", "Delete this folder now to remove everything:"));
         text.AppendLine();
         text.AppendLine($"　{folder}");
 
         MessageDialog.Show(
             text.ToString().TrimEnd(),
-            "Roboc — 卸载",
+            Lang.Pick("Roboc — 卸载", "Roboc — Removed"),
             DialogButtons.Acknowledge,
             warning: true,
             centre: false);
@@ -313,12 +356,12 @@ internal static class UninstallCommand
 
     private static void Report(string folder, List<(string Root, long Bytes)> bins)
     {
-        Console.WriteLine("Roboc 已从系统中移除。");
+        Console.WriteLine(Lang.Pick("Roboc 已从系统中移除。", "Roboc has been removed from the system."));
         Console.WriteLine();
 
         if (bins.Count > 0)
         {
-            Console.WriteLine("回收站未动——里面是你要么取回、要么自行删除的文件：");
+            Console.WriteLine(Lang.Pick("回收站未动——里面是你要么取回、要么自行删除的文件：", "Recycle bins untouched -- they hold files for you to recover or delete yourself:"));
 
             foreach ((string root, long bytes) in bins)
             {
@@ -328,7 +371,7 @@ internal static class UninstallCommand
             Console.WriteLine();
         }
 
-        Console.WriteLine("现在删除这个文件夹即可彻底清除：");
+        Console.WriteLine(Lang.Pick("现在删除这个文件夹即可彻底清除：", "Delete this folder now to remove everything:"));
         Console.WriteLine($"  {folder}");
     }
 

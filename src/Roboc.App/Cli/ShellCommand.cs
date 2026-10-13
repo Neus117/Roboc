@@ -57,8 +57,8 @@ internal static class ShellCommand
 
         if (paths.Count == 0)
         {
-            MaintenanceCommands.ReportProblemPublic(fromMenu, "⚠️没有收到任何选中的项目。\r\n\r\n" +
-                "如果这条是从右键菜单调用的，说明选中项没有传达到子菜单。");
+            MaintenanceCommands.ReportProblemPublic(fromMenu, Lang.Pick("⚠️没有收到任何选中的项目。\r\n\r\n", "⚠️No items were received.\r\n\r\n") +
+                Lang.Pick("如果这条是从右键菜单调用的，说明选中项没有传达到子菜单。", "If this came from the context menu, the selection did not reach the submenu."));
             return 2;
         }
 
@@ -76,14 +76,14 @@ internal static class ShellCommand
 
         if (paths.Count == 0)
         {
-            MaintenanceCommands.ReportProblemPublic(fromMenu, "⚠️没有收到任何选中的项目。");
+            MaintenanceCommands.ReportProblemPublic(fromMenu, Lang.Pick("⚠️没有收到任何选中的项目。", "⚠️No items were received."));
             return 2;
         }
 
 
         if (!ClipboardFiles.TrySet(paths, out string failure))
         {
-            MaintenanceCommands.ReportProblemPublic(fromMenu, $"⚠️写入剪贴板失败：{failure}");
+            MaintenanceCommands.ReportProblemPublic(fromMenu, Lang.Pick($"⚠️写入剪贴板失败：{failure}", $"⚠️Could not write to the clipboard: {failure}"));
             return 1;
         }
 
@@ -97,7 +97,7 @@ internal static class ShellCommand
         // feature visibly broken until it is found and closed.
         if (!ContextMenuInstaller.SyncPaste(hasClipboardFiles: true, out string syncFailure))
         {
-            Console.Error.WriteLine($"roboc: 无法更新粘贴菜单项的状态：{syncFailure}");
+            Console.Error.WriteLine(Lang.Pick($"roboc: 无法更新粘贴菜单项的状态：{syncFailure}", $"roboc: cannot update the paste menu entry: {syncFailure}"));
         }
 
         // No confirmation. Explorer shows none when you copy, and 粘贴 lighting up
@@ -105,7 +105,7 @@ internal static class ShellCommand
 
         if (!args.Flag("--quiet"))
         {
-            Console.WriteLine($"已复制 {paths.Count} 项到剪贴板");
+            Console.WriteLine(Lang.Pick($"已复制 {paths.Count} 项到剪贴板", $"Copied {paths.Count} items to the clipboard"));
         }
 
         return 0;
@@ -169,7 +169,7 @@ internal static class ShellCommand
         if (sources.Count == 0)
         {
             MaintenanceCommands.ReportProblemPublic(fromMenu,
-                "⚠️剪贴板里没有文件。\r\n\r\n请先对要复制的项目使用 Roboc → 复制。");
+                Lang.Pick("⚠️剪贴板里没有文件。\r\n\r\n请先对要复制的项目使用 Roboc → 复制。", "⚠️There are no files on the clipboard.\r\n\r\nUse Roboc → Copy on what you want to copy first."));
             return 2;
         }
 
@@ -299,9 +299,9 @@ internal static class ShellCommand
             if (!quiet)
             {
                 Console.WriteLine();
-                Console.WriteLine($"入口位置：{SendToMenu.SendToDirectory}");
-                Console.WriteLine("右键任意文件 → 发送到 → 选择 Roboc 复制 / 回收 / 彻底删除。");
-                Console.WriteLine("多选时全部选中项会一次传给程序。");
+                Console.WriteLine(Lang.Pick($"入口位置：{SendToMenu.SendToDirectory}", $"Installed at: {SendToMenu.SendToDirectory}"));
+                Console.WriteLine(Lang.Pick("右键任意文件 → 发送到 → 选择 Roboc 复制 / 回收 / 彻底删除。", "Right-click any file → Send to → pick Roboc Copy / Recycle / Delete."));
+                Console.WriteLine(Lang.Pick("多选时全部选中项会一次传给程序。", "With several items selected, all of them are passed in one go."));
             }
 
             return 0;
@@ -315,12 +315,12 @@ internal static class ShellCommand
 
         if (ContextMenuInstaller.MachineScope && !IsElevated() && !quiet)
         {
-            Console.WriteLine("提示：--machine 写入 HKLM，需要管理员权限；当前进程未提权，可能失败。");
+            Console.WriteLine(Lang.Pick("提示：--machine 写入 HKLM，需要管理员权限；当前进程未提权，可能失败。", "Note: --machine writes to HKLM and needs administrator rights. This process is not elevated, so it may fail."));
         }
 
         if (ContextMenuInstaller.FlatLayout && !quiet)
         {
-            Console.WriteLine("使用平级菜单布局（非级联）");
+            Console.WriteLine(Lang.Pick("使用平级菜单布局（非级联）", "Using the flat menu layout (not cascaded)"));
         }
 
         int count = ContextMenuInstaller.Install(ExecutablePath, out string failure, log);
@@ -401,20 +401,20 @@ internal static class ShellCommand
         }
         catch (IOException ex)
         {
-            Console.Error.WriteLine($"roboc: 无法写入 {path}：{ex.Message}");
+            Console.Error.WriteLine(Lang.Pick($"roboc: 无法写入 {path}：{ex.Message}", $"roboc: cannot write {path}: {ex.Message}"));
             return 1;
         }
         catch (UnauthorizedAccessException ex)
         {
-            Console.Error.WriteLine($"roboc: 无法写入 {path}：{ex.Message}");
+            Console.Error.WriteLine(Lang.Pick($"roboc: 无法写入 {path}：{ex.Message}", $"roboc: cannot write {path}: {ex.Message}"));
             return 1;
         }
 
-        Console.WriteLine($"已导出注册表文件：{path}");
+        Console.WriteLine(Lang.Pick($"已导出注册表文件：{path}", $"Registry file written: {path}"));
         Console.WriteLine();
-        Console.WriteLine("双击导入即可（regedit 是 Windows 受信任程序，不受针对本程序的限制）。");
-        Console.WriteLine("导入前可以先用记事本打开查看内容。");
-        Console.WriteLine("导入后如未立即生效，重启资源管理器或注销重登。");
+        Console.WriteLine(Lang.Pick("双击导入即可（regedit 是 Windows 受信任程序，不受针对本程序的限制）。", "Double-click it to import. (regedit is a trusted Windows program and is not subject to the restrictions placed on this one.)"));
+        Console.WriteLine(Lang.Pick("导入前可以先用记事本打开查看内容。", "You can open it in Notepad first to see what it contains."));
+        Console.WriteLine(Lang.Pick("导入后如未立即生效，重启资源管理器或注销重登。", "If it does not take effect immediately, restart Explorer or sign out and back in."));
         return 0;
     }
 
@@ -487,15 +487,22 @@ internal static class ShellCommand
 
         if (files > 0)
         {
-            parts.Add($"{files:N0} 个文件");
+            parts.Add(Lang.Pick($"{files:N0} 个文件", $"{files:N0} files"));
         }
 
         if (folders > 0)
         {
-            parts.Add($"{folders:N0} 个文件夹");
+            parts.Add(Lang.Pick($"{folders:N0} 个文件夹", $"{folders:N0} folders"));
         }
 
-        return parts.Count == 0 ? " 0 项" : " " + string.Join("、", parts);
+        if (parts.Count == 0)
+        {
+            return Lang.Pick(" 0 项", " 0 items");
+        }
+
+        // The separator belongs to the language, not to the join: Chinese uses an
+        // enumeration comma, English a comma and a space.
+        return " " + string.Join(Lang.Pick("、", ", "), parts);
     }
 
     public static int Status(Args args)
@@ -505,7 +512,11 @@ internal static class ShellCommand
 
         Console.WriteLine($"executable : {ExecutablePath}");
         Console.WriteLine($"log        : {ConsoleHost.LogPath ?? ConsoleHost.LogLocationHint()}");
-        Console.WriteLine($"发送到菜单 : {(SendToMenu.IsInstalled ? "已安装" : "未安装")}");
+        string sendToState = SendToMenu.IsInstalled
+            ? Lang.Pick("已安装", "installed")
+            : Lang.Pick("未安装", "not installed");
+
+        Console.WriteLine(Lang.Pick($"发送到菜单 : {sendToState}", $"Send To    : {sendToState}"));
 
         if (installed is null)
         {

@@ -41,10 +41,21 @@ jobs:
       #
       # --selftest 会真的创建目录、写文件、建硬链接、设重解析点，
       # 而裁剪与单文件发布可能改变这些调用的行为——发布产物才是要验的东西。
+      # 发布也必须零警告。
+      #
+      # 构建的 -warnaserror 只覆盖编译，而裁剪警告是 ILLink 在【发布】时产生的 ——
+      # 只在 build 上卡警告，等于给这一类留了后门。
+      #
+      # 裁剪确实会警告：本项目有 26 条来自 ExplorerSelection 按 ProgID 反射调用
+      # Shell.Application，1 条来自框架的 COM 激活，1 条是 GDI+ 包的自我汇总。
+      # 这些不是待修的问题，是已知且接受的设计代价，所以【在 csproj 里按编号显式抑制，
+      # 并逐条写明理由】—— 而不是让它们留在日志里被忽略。
+      #
+      # 于是这条命令的含义是：除了 csproj 里写明的那三个编号，一条警告都不许有。
       - name: 发布
         run: >
           dotnet publish src/Roboc.App/Roboc.App.csproj
-          -c Release --no-restore
+          -c Release --no-restore -warnaserror
           -o artifacts/ci
 
       - name: 自检
@@ -53,6 +64,18 @@ jobs:
       # 接线检查：找出"声明了却从未被读取"的配置项，
       # 以及命令行标志未注册进 Args.TakesValue 的情况。
       # 第一次运行就找出了 --export-reg。
+      # 两个自动检查，各自对应一类已经犯过的错误。
+      #
+      # 都不是风格问题：它们检查的缺陷**编译通过、运行无异常、只是不生效**，
+      # 是本项目最难查的一类。
+      - name: BOM 检查
+        shell: pwsh
+        run: ./scripts/check-bom.ps1 -Root .
+
+      - name: 静态初始化检查
+        shell: pwsh
+        run: ./scripts/check-static-init.ps1 -Root .
+
       - name: 接线检查
         shell: pwsh
         run: ./scripts/check-wiring.ps1 -Root .

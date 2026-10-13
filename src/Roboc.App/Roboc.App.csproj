@@ -48,10 +48,47 @@
     -->
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+
+    <!--
+      Trim warnings that are accepted rather than fixed.
+
+      28 of them appear on a clean publish, and have done since long before the
+      drawing layer changed. They are listed here, one reason per code, because
+      the alternative (leaving them in the build log) is how a real warning goes
+      unread. Rule 8 of the developer document says the build must be silent, and
+      silence has to mean something: anything suppressed here is suppressed
+      deliberately, with a reason, and any NEW code still shows up.
+
+      IL2072 / IL2075 (26, all in Cli/ExplorerSelection.cs)
+        Reading the selection out of a running Explorer window. Explorer's
+        Shell.Application object is reached by ProgID and its members by name,
+        because no interop assembly for it survives trimming. The whole point of
+        that code is to call methods that cannot be known at compile time.
+        Trimming cannot verify what it cannot see, so it warns. This is not a
+        latent defect; it is the design, and it is why the selection can be read
+        at all when a hundred files are selected.
+
+      IL2026 (1, ComActivator.GetClassFactoryForTypeInternal)
+        Raised by the framework itself once BuiltInComInteropSupport is on,
+        which it must be (see the note above about SendTo shortcuts). There is
+        no call site to annotate; the warning comes from inside the runtime.
+
+      IL2104 (1, System.Private.Windows.Core)
+        An aggregate: "this assembly produced trim warnings". It is the GDI+
+        package reporting on itself, not on any line of code here.
+
+      What is deliberately NOT listed: any warning outside these three codes.
+      A new one is a new fact about this program and should be read.
+    -->
+    <NoWarn>$(NoWarn);IL2026;IL2072;IL2075;IL2104</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Roboc.Core\Roboc.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Drawing.Common" Version="10.0.12" />
   </ItemGroup>
 
 

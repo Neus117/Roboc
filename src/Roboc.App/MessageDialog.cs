@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Roboc.Core.Model;
 
 namespace Roboc.App;
 
@@ -109,9 +110,9 @@ internal static class MessageDialog
 
         private string[] Labels => _buttons switch
         {
-            DialogButtons.YesNo => ["是", "否"],
-            DialogButtons.YesNoCancel => ["是", "否", "取消"],
-            _ => ["确定"],
+            DialogButtons.YesNo => [Lang.Pick("是", "Yes"), Lang.Pick("否", "No")],
+            DialogButtons.YesNoCancel => [Lang.Pick("是", "Yes"), Lang.Pick("否", "No"), Lang.Pick("取消", "Cancel")],
+            _ => [Lang.Pick("确定", "OK")],
         };
 
         /// <summary>The button a plain Enter should choose: the last one, which is
@@ -499,20 +500,9 @@ internal static class MessageDialog
                 ? (hot ? Lighten(palette.Accent, pressed) : palette.Accent)
                 : (hot ? palette.Track : palette.Window);
 
-            nint region = CreateRoundRectRgn(left, _buttonTop, left + width + 1, _buttonTop + height + 1, radius, radius);
-            nint brush = CreateSolidBrush(background);
-            FillRgn(dc, region, brush);
-            DeleteObject(brush);
-            DeleteObject(region);
-
-            if (!primary)
-            {
-                nint outline = CreateRoundRectRgn(left, _buttonTop, left + width + 1, _buttonTop + height + 1, radius, radius);
-                nint outlineBrush = CreateSolidBrush(palette.Border);
-                FrameRgn(dc, outline, outlineBrush, 1, 1);
-                DeleteObject(outlineBrush);
-                DeleteObject(outline);
-            }
+            RoundedBox.Draw(
+                dc, left, _buttonTop, width, height, radius,
+                background, primary ? null : palette.Border);
 
             SetBkMode(dc, 1);
             SetTextColor(dc, primary ? 0x00FFFFFF : palette.Text);
@@ -575,20 +565,15 @@ internal static class MessageDialog
             ? (pressed ? Darken(palette.Accent) : palette.Accent)
             : (hot ? palette.Track : palette.Window);
 
-        nint region = CreateRoundRectRgn(left, top, left + width + 1, top + height + 1, radius, radius);
-        nint brush = CreateSolidBrush(background);
-        FillRgn(dc, region, brush);
-        DeleteObject(brush);
-        DeleteObject(region);
-
-        if (!primary)
-        {
-            nint outline = CreateRoundRectRgn(left, top, left + width + 1, top + height + 1, radius, radius);
-            nint outlineBrush = CreateSolidBrush(palette.Border);
-            FrameRgn(dc, outline, outlineBrush, 1, 1);
-            DeleteObject(outlineBrush);
-            DeleteObject(outline);
-        }
+        // Drawn as geometry rather than as a filled region.
+        //
+        // A GDI region is a set of whole pixels, so CreateRoundRectRgn can only approximate
+        // the corner one pixel at a time and the result is a visible staircase -- worst on
+        // the primary button, where a saturated blue meets a pale background and there is
+        // no texture to hide it behind. A GraphicsPath is a curve, and filling it with
+        // anti-aliasing samples how much of each pixel the curve covers instead of
+        // deciding whether it is inside. See RoundedBox for the whole of it.
+        RoundedBox.Draw(dc, left, top, width, height, radius, background, primary ? null : palette.Border);
 
         SetBkMode(dc, 1);
         SetTextColor(dc, primary ? 0x00FFFFFF : palette.Text);
@@ -790,15 +775,8 @@ internal static class MessageDialog
     [DllImport("gdi32.dll")]
     private static extern nint CreateSolidBrush(uint color);
 
-    [DllImport("gdi32.dll")]
-    private static extern nint CreateRoundRectRgn(
-        int left, int top, int right, int bottom, int width, int height);
 
-    [DllImport("gdi32.dll")]
-    private static extern int FillRgn(nint dc, nint region, nint brush);
 
-    [DllImport("gdi32.dll")]
-    private static extern int FrameRgn(nint dc, nint region, nint brush, int width, int height);
 
     [DllImport("user32.dll")]
     private static extern int FillRect(nint dc, ref RECT rect, nint brush);

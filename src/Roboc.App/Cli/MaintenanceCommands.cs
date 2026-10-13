@@ -2,6 +2,7 @@ using Microsoft.Win32;
 using Roboc.Core.Control;
 using Roboc.Core.Fs;
 using Roboc.Core.Interop;
+using Roboc.Core.Model;
 
 namespace Roboc.App.Cli;
 
@@ -24,21 +25,21 @@ internal static class MaintenanceCommands
     {
         var text = new System.Text.StringBuilder();
 
-        text.AppendLine($"♻️选中的 {inBin.Count:N0} 项在 Roboc 回收站里。");
+        text.AppendLine(Lang.Pick($"♻️选中的 {inBin.Count:N0} 项在 Roboc 回收站里。", $"♻️{inBin.Count:N0} of the selected items are in the Roboc recycle bin."));
         text.AppendLine();
-        text.AppendLine("回收站中的项目无法再次回收，可以取回它们原来的位置：");
+        text.AppendLine(Lang.Pick("回收站中的项目无法再次回收，可以取回它们原来的位置：", "Items already in the bin cannot be recycled again. They can be put back where they came from:"));
         text.AppendLine();
-        text.AppendLine("是：取回原位置");
-        text.AppendLine("否：什么都不做");
+        text.AppendLine(Lang.Pick("是：取回原位置", "Yes: put them back"));
+        text.AppendLine(Lang.Pick("否：什么都不做", "No: do nothing"));
 
         if (discardCount > 0)
         {
             text.AppendLine();
-            text.AppendLine($"另有 {discardCount:N0} 项不在回收站中，将在取回之后照常回收。");
+            text.AppendLine(Lang.Pick($"另有 {discardCount:N0} 项不在回收站中，将在取回之后照常回收。", $"{discardCount:N0} more are not in the bin and will be recycled as usual afterwards."));
         }
 
         return ShowDialog(
-            text.ToString().TrimEnd(), "Roboc — 取回确认",
+            text.ToString().TrimEnd(), Lang.Pick("Roboc — 取回确认", "Roboc — Confirm restore"),
             warning: false, ask: true, centre: true);
     }
 
@@ -87,8 +88,8 @@ internal static class MaintenanceCommands
 
         if (paths.Count == 0)
         {
-            ReportProblem(fromMenuEarly, "⚠️没有收到任何选中的项目。\r\n\r\n" +
-                "如果这条是从右键菜单调用的，说明选中项没有传达到子菜单。");
+            ReportProblem(fromMenuEarly, Lang.Pick("⚠️没有收到任何选中的项目。\r\n\r\n", "⚠️No items were received.\r\n\r\n") +
+                Lang.Pick("如果这条是从右键菜单调用的，说明选中项没有传达到子菜单。", "If this was invoked from the context menu, the selection did not reach the submenu."));
             return 2;
         }
 
@@ -101,7 +102,7 @@ internal static class MaintenanceCommands
 
         if (paths.Count == 0)
         {
-            ReportProblem(fromMenuEarly, "⚠️没有收到任何选中的项目。");
+            ReportProblem(fromMenuEarly, Lang.Pick("⚠️没有收到任何选中的项目。", "⚠️No items were received."));
             return 2;
         }
 
@@ -174,20 +175,20 @@ internal static class MaintenanceCommands
                 moved++;
                 if (!args.Flag("--quiet"))
                 {
-                    Console.WriteLine($"已回收 {path}");
+                    Console.WriteLine(Lang.Pick($"已回收 {path}", $"Recycled {path}"));
                     Console.WriteLine($"    -> {PathUtil.ToDisplay(stored)}");
                 }
             }
             else
             {
                 failed++;
-                Console.Error.WriteLine($"roboc: 无法回收 {path}：{DescribeBinError(error)}");
+                Console.Error.WriteLine(Lang.Pick($"roboc: 无法回收 {path}：{DescribeBinError(error)}", $"roboc: cannot recycle {path}: {DescribeBinError(error)}"));
             }
         }
 
         if (!args.Flag("--quiet"))
         {
-            Console.WriteLine($"回收完成：成功 {moved} 项，失败 {failed} 项");
+            Console.WriteLine(Lang.Pick($"回收完成：成功 {moved} 项，失败 {failed} 项", $"Recycle finished: {moved} succeeded, {failed} failed"));
         }
 
         return failed == 0 ? 0 : 3;
@@ -215,15 +216,15 @@ internal static class MaintenanceCommands
             return 0;
         }
 
-        string text = $"⚠️已回收 {moved} 项，{failures.Count} 项失败：\r\n\r\n" +
+        string text = Lang.Pick($"⚠️已回收 {moved} 项，{failures.Count} 项失败：\r\n\r\n", $"⚠️Recycled {moved}, {failures.Count} failed:\r\n\r\n") +
                       string.Join("\r\n\r\n", failures.Take(10));
 
         if (failures.Count > 10)
         {
-            text += $"\r\n\r\n（另有 {failures.Count - 10} 项未显示）";
+            text += Lang.Pick($"\r\n\r\n（另有 {failures.Count - 10} 项未显示）", $"\r\n\r\n({failures.Count - 10} more not shown)");
         }
 
-        ShowDialog(text, "Roboc 回收", warning: true, centre: true);
+        ShowDialog(text, Lang.Pick("Roboc 回收", "Roboc — Recycle"), warning: true, centre: true);
         return 3;
     }
 
@@ -244,7 +245,7 @@ internal static class MaintenanceCommands
 
         if (paths.Count == 0)
         {
-            ReportProblem(fromMenu, "⚠️没有收到任何选中的项目。");
+            ReportProblem(fromMenu, Lang.Pick("⚠️没有收到任何选中的项目。", "⚠️No items were received."));
             return 2;
         }
 
@@ -267,7 +268,7 @@ internal static class MaintenanceCommands
 
             if (binRoot is null)
             {
-                failures.Add($"{path}\r\n  该项目不在 Roboc 回收站中，无法取回。");
+                failures.Add(Lang.Pick($"{path}\r\n  该项目不在 Roboc 回收站中，无法取回。", $"{path}\r\n  This item is not in the Roboc recycle bin, so it cannot be restored."));
                 continue;
             }
 
@@ -275,7 +276,7 @@ internal static class MaintenanceCommands
 
             if (original is null)
             {
-                failures.Add($"{path}\r\n  无法从回收站的存放位置推算出原路径。");
+                failures.Add(Lang.Pick($"{path}\r\n  无法从回收站的存放位置推算出原路径。", $"{path}\r\n  The original location cannot be worked out from where it is stored."));
                 continue;
             }
 
@@ -286,7 +287,7 @@ internal static class MaintenanceCommands
             {
                 failures.Add(
                     $"{PathUtil.ToDisplay(original)}\r\n" +
-                    "  原位置已经有同名项目了。请先处理掉它，否则取回会覆盖掉它。");
+                    Lang.Pick("  原位置已经有同名项目了。请先处理掉它，否则取回会覆盖掉它。", "  Something with that name is already in the original location. Deal with it first, or restoring will overwrite it."));
                 continue;
             }
 
@@ -300,12 +301,12 @@ internal static class MaintenanceCommands
                 }
                 catch (IOException ex)
                 {
-                    failures.Add($"{path}\r\n  无法建立原目录：{ex.Message}");
+                    failures.Add(Lang.Pick($"{path}\r\n  无法建立原目录：{ex.Message}", $"{path}\r\n  Cannot create the original folder: {ex.Message}"));
                     continue;
                 }
                 catch (UnauthorizedAccessException ex)
                 {
-                    failures.Add($"{path}\r\n  无法建立原目录：{ex.Message}");
+                    failures.Add(Lang.Pick($"{path}\r\n  无法建立原目录：{ex.Message}", $"{path}\r\n  Cannot create the original folder: {ex.Message}"));
                     continue;
                 }
             }
@@ -317,7 +318,7 @@ internal static class MaintenanceCommands
                 // and would have needed an InternalsVisibleTo for one string.
                 int moveError = System.Runtime.InteropServices.Marshal.GetLastWin32Error();
                 failures.Add(
-                    $"{path}\r\n  移动失败：{new System.ComponentModel.Win32Exception(moveError).Message}");
+                    Lang.Pick($"{path}\r\n  移动失败：{new System.ComponentModel.Win32Exception(moveError).Message}", $"{path}\r\n  Move failed: {new System.ComponentModel.Win32Exception(moveError).Message}"));
                 continue;
             }
 
@@ -337,7 +338,7 @@ internal static class MaintenanceCommands
             if (failures.Count > 0)
             {
                 var text = new System.Text.StringBuilder();
-                text.AppendLine($"⚠️已取回 {restored} 项，{failures.Count} 项失败：");
+                text.AppendLine(Lang.Pick($"⚠️已取回 {restored} 项，{failures.Count} 项失败：", $"⚠️Restored {restored}, {failures.Count} failed:"));
                 text.AppendLine();
 
                 foreach (string failure in failures.Take(10))
@@ -359,7 +360,7 @@ internal static class MaintenanceCommands
 
         if (!args.Flag("--quiet"))
         {
-            Console.WriteLine($"取回完成：成功 {restored} 项，失败 {failures.Count} 项");
+            Console.WriteLine(Lang.Pick($"取回完成：成功 {restored} 项，失败 {failures.Count} 项", $"Restore finished: {restored} succeeded, {failures.Count} failed"));
         }
 
         return failures.Count == 0 ? 0 : 3;
@@ -391,15 +392,15 @@ internal static class MaintenanceCommands
               if (args.Flag("--gui-errors"))
               {
                   ShowDialog(
-                      "♻️回收站是空的，没有可回收的内容。",
-                      "Roboc 回收站",
+                      Lang.Pick("♻️回收站是空的，没有可回收的内容。", "♻️The recycle bin is empty."),
+                      Lang.Pick("Roboc 回收站", "Roboc — Recycle bin"),
                       warning: false,
                       centre: true);
 
                   return 0;
               }
 
-              Console.WriteLine("♻️回收空间是空的，没有可回收的内容。");
+              Console.WriteLine(Lang.Pick("♻️回收空间是空的，没有可回收的内容。", "♻️The recycle bin is empty."));
               return 0;
         }
 
@@ -427,15 +428,15 @@ internal static class MaintenanceCommands
             if (args.Flag("--gui-errors"))
             {
                 ShowDialog(
-                    "♻️回收站是空的，没有可回收的内容。",
-                    "Roboc 回收站",
+                    Lang.Pick("♻️回收站是空的，没有可回收的内容。", "♻️The recycle bin is empty."),
+                    Lang.Pick("Roboc 回收站", "Roboc — Recycle bin"),
                     warning: false,
                     centre: true);
 
                 return 0;
             }
 
-            Console.WriteLine("♻️回收空间是空的，没有可回收的内容。");
+            Console.WriteLine(Lang.Pick("♻️回收空间是空的，没有可回收的内容。", "♻️The recycle bin is empty."));
             return 0;
         }
 
@@ -443,7 +444,7 @@ internal static class MaintenanceCommands
 
         if (!args.Flag("--empty"))
         {
-            Console.WriteLine($"回收站中共有 {items.Count} 项，占用 {FormatBytes(totalBytes)}：");
+            Console.WriteLine(Lang.Pick($"回收站中共有 {items.Count} 项，占用 {FormatBytes(totalBytes)}：", $"{items.Count} items in the recycle bin, using {FormatBytes(totalBytes)}:"));
             Console.WriteLine();
 
             foreach ((string root, RecycleBin.Item item) in items.OrderByDescending(i => i.Item.Bytes))
@@ -452,8 +453,13 @@ internal static class MaintenanceCommands
             }
 
             Console.WriteLine();
-            Console.WriteLine($"存储位置：{string.Join("、", roots.Select(PathUtil.ToDisplay))}");
-            Console.WriteLine("加 --empty 参数可清空并释放空间。");
+            // The separator belongs to the language, not to the join: Chinese uses an
+            // enumeration comma and English a comma and a space, and hardcoding either
+            // reads as a typo in the other.
+            Console.WriteLine(Lang.Pick(
+                $"存储位置：{string.Join("、", roots.Select(PathUtil.ToDisplay))}",
+                $"Stored at: {string.Join(", ", roots.Select(PathUtil.ToDisplay))}"));
+            Console.WriteLine(Lang.Pick("加 --empty 参数可清空并释放空间。", "Pass --empty to empty it and reclaim the space."));
 
             if (args.Flag("--gui-errors"))
             {
@@ -477,7 +483,7 @@ internal static class MaintenanceCommands
         // only way through.
         if (!args.Flag("--yes"))
         {
-            Console.Error.WriteLine("roboc: 清空回收站不可恢复，需要 --yes 确认");
+            Console.Error.WriteLine(Lang.Pick("roboc: 清空回收站不可恢复，需要 --yes 确认", "roboc: emptying the recycle bin cannot be undone; pass --yes to confirm"));
             return 2;
         }
 
@@ -494,7 +500,7 @@ internal static class MaintenanceCommands
             {
                 failed++;
                 Console.Error.WriteLine(
-                    $"roboc: 无法删除 {PathUtil.ToDisplay(item.StoredPath)}：{DescribeDeleteError(deleteError)}");
+                    Lang.Pick($"roboc: 无法删除 {PathUtil.ToDisplay(item.StoredPath)}：{DescribeDeleteError(deleteError)}", $"roboc: cannot delete {PathUtil.ToDisplay(item.StoredPath)}: {DescribeDeleteError(deleteError)}"));
             }
         }
 
@@ -505,8 +511,8 @@ internal static class MaintenanceCommands
 
         if (!args.Flag("--quiet"))
         {
-            Console.WriteLine($"已释放 {FormatBytes(totalBytes)}，删除 {removed} 项" +
-                              (failed > 0 ? $"，{failed} 项失败" : ""));
+            Console.WriteLine(Lang.Pick($"已释放 {FormatBytes(totalBytes)}，删除 {removed} 项", $"Freed {FormatBytes(totalBytes)}, deleted {removed} items") +
+                              (failed > 0 ? Lang.Pick($"，{failed} 项失败", $", {failed} failed") : ""));
         }
 
         return failed == 0 ? 0 : 3;
@@ -521,8 +527,8 @@ internal static class MaintenanceCommands
 
         if (paths.Count == 0)
         {
-            ReportProblem(fromMenu, "⚠️没有收到任何选中的项目。\r\n\r\n" +
-                "如果这条是从右键菜单调用的，说明选中项没有传达到子菜单。");
+            ReportProblem(fromMenu, Lang.Pick("⚠️没有收到任何选中的项目。\r\n\r\n", "⚠️No items were received.\r\n\r\n") +
+                Lang.Pick("如果这条是从右键菜单调用的，说明选中项没有传达到子菜单。", "If this was invoked from the context menu, the selection did not reach the submenu."));
             return 2;
         }
 
@@ -535,7 +541,7 @@ internal static class MaintenanceCommands
 
         if (paths.Count == 0)
         {
-            ReportProblem(fromMenu, "⚠️没有收到任何选中的项目。");
+            ReportProblem(fromMenu, Lang.Pick("⚠️没有收到任何选中的项目。", "⚠️No items were received."));
             return 2;
         }
 
@@ -598,7 +604,7 @@ internal static class MaintenanceCommands
                 // -- it starts with "roboc:" and carries no mark of its own, so on its
                 // own it was the one dialog in the program that did not look like the
                 // others. The engine's words are kept verbatim underneath.
-                ReportProblem(true, $"⚠️彻底删除失败：\r\n\r\n{text}");
+                ReportProblem(true, Lang.Pick($"⚠️彻底删除失败：\r\n\r\n{text}", $"⚠️Permanent delete failed:\r\n\r\n{text}"));
                 return exitCode;
             }
 
@@ -623,28 +629,29 @@ internal static class MaintenanceCommands
     {
         _ = args;
 
-        Console.WriteLine("Roboc 环境诊断");
+        Console.WriteLine(Lang.Pick("Roboc 环境诊断", "Roboc environment report"));
         Console.WriteLine("=================================================");
-        Console.WriteLine($"程序位置   : {Environment.ProcessPath}");
-        Console.WriteLine($"64 位进程  : {Environment.Is64BitProcess}");
-        Console.WriteLine($"完整性级别 : {Kernel32.DescribeIntegrityLevel()}");
-        Console.WriteLine($"输出编码   : {Console.OutputEncoding.CodePage} ({Console.OutputEncoding.WebName})");
-        Console.WriteLine($"系统 ANSI CP: {Kernel32.GetACP()} / OEM CP: {Kernel32.GetOEMCP()}");
-        Console.WriteLine($"控制台输出 CP: {Kernel32.GetConsoleOutputCP()}");
-        Console.WriteLine($"有控制台   : {Kernel32.GetConsoleMode(Kernel32.GetStdHandle(Kernel32.STD_OUTPUT_HANDLE), out _) != 0}");
-        Console.WriteLine($"日志文件   : {ConsoleHost.LogPath ?? "(未启用)"}");
+        Console.WriteLine(Lang.Pick($"程序位置   : {Environment.ProcessPath}", $"Program    : {Environment.ProcessPath}"));
+        Console.WriteLine(Lang.Pick($"64 位进程  : {Environment.Is64BitProcess}", $"64-bit     : {Environment.Is64BitProcess}"));
+        Console.WriteLine(Lang.Pick($"完整性级别 : {Kernel32.DescribeIntegrityLevel()}", $"Integrity  : {Kernel32.DescribeIntegrityLevel()}"));
+        Console.WriteLine(Lang.Pick($"输出编码   : {Console.OutputEncoding.CodePage} ({Console.OutputEncoding.WebName})", $"Output enc : {Console.OutputEncoding.CodePage} ({Console.OutputEncoding.WebName})"));
+        Console.WriteLine(Lang.Pick($"系统 ANSI CP: {Kernel32.GetACP()} / OEM CP: {Kernel32.GetOEMCP()}", $"System CPs : ANSI {Kernel32.GetACP()} / OEM {Kernel32.GetOEMCP()}"));
+        Console.WriteLine(Lang.Pick($"控制台输出 CP: {Kernel32.GetConsoleOutputCP()}", $"Console CP : {Kernel32.GetConsoleOutputCP()}"));
+        Console.WriteLine(Lang.Pick($"有控制台   : {Kernel32.GetConsoleMode(Kernel32.GetStdHandle(Kernel32.STD_OUTPUT_HANDLE), out _) != 0}", $"Console    : {Kernel32.GetConsoleMode(Kernel32.GetStdHandle(Kernel32.STD_OUTPUT_HANDLE), out _) != 0}"));
+        string logPath = ConsoleHost.LogPath ?? Lang.Pick("（未启用）", "(not enabled)");
+        Console.WriteLine(Lang.Pick($"日志文件   : {logPath}", $"Log file   : {logPath}"));
         Console.WriteLine();
 
         (string Path, string Why)[] probes =
         [
-            (@"Software\RobocProbe", "HKCU\\Software 下的普通键"),
-            (@"Software\Classes\RobocProbe", "HKCU\\Software\\Classes 根下"),
-            (@"Software\Classes\*\shell\RobocProbe", "文件右键菜单区（键名含字面星号）"),
-            (@"Software\Classes\Directory\shell\RobocProbe", "文件夹右键菜单区"),
-            (@"Software\Classes\Roboc.Menu\shell\01copy", "本程序实际要写的位置"),
+            (@"Software\RobocProbe", Lang.Pick("HKCU\\Software 下的普通键", "an ordinary key under HKCU\\Software")),
+            (@"Software\Classes\RobocProbe", Lang.Pick("HKCU\\Software\\Classes 根下", "the root of HKCU\\Software\\Classes")),
+            (@"Software\Classes\*\shell\RobocProbe", Lang.Pick("文件右键菜单区（键名含字面星号）", "the file context-menu area (key name contains a literal asterisk)")),
+            (@"Software\Classes\Directory\shell\RobocProbe", Lang.Pick("文件夹右键菜单区", "the folder context-menu area")),
+            (@"Software\Classes\Roboc.Menu\shell\01copy", Lang.Pick("本程序实际要写的位置", "where this program actually writes")),
         ];
 
-        Console.WriteLine("注册表写入测试：");
+        Console.WriteLine(Lang.Pick("注册表写入测试：", "Registry write test:"));
         int usable = 0;
 
         foreach ((string path, string why) in probes)
@@ -657,13 +664,13 @@ internal static class MaintenanceCommands
                 {
                     if (key is null)
                     {
-                        verdict = "失败：CreateSubKey 返回了 null";
+                        verdict = Lang.Pick("失败：CreateSubKey 返回了 null", "failed: CreateSubKey returned null");
                     }
                     else
                     {
                         key.SetValue("probe", "1");
                         key.DeleteValue("probe", throwOnMissingValue: false);
-                        verdict = "可写";
+                        verdict = Lang.Pick("可写", "writable");
                         usable++;
                     }
                 }
@@ -679,38 +686,38 @@ internal static class MaintenanceCommands
             }
             catch (UnauthorizedAccessException ex)
             {
-                verdict = $"被拒绝：{ex.Message}";
+                verdict = Lang.Pick($"被拒绝：{ex.Message}", $"denied: {ex.Message}");
             }
             catch (Exception ex)
             {
                 verdict = $"{ex.GetType().Name}：{ex.Message}";
             }
 
-            Console.WriteLine($"  [{(verdict == "可写" ? "可以" : "拒绝")}] {path}");
+            Console.WriteLine($"  [{(verdict == Lang.Pick("可写", "writable") ? "可以" : "拒绝")}] {path}");
             Console.WriteLine($"         {why}");
-            if (verdict != "可写")
+            if (verdict != Lang.Pick("可写", "writable"))
             {
                 Console.WriteLine($"         {verdict}");
             }
         }
 
         Console.WriteLine();
-        Console.WriteLine($"结论：{usable}/{probes.Length} 个位置可写。");
+        Console.WriteLine(Lang.Pick($"结论：{usable}/{probes.Length} 个位置可写。", $"Result: {usable} of {probes.Length} locations are writable."));
 
         if (usable == 0)
         {
-            Console.WriteLine("  所有位置都被拒绝，说明整个 HKCU 写入对本程序被拦截。");
-            Console.WriteLine("  普通用户对自己的 HKCU 有完全控制权，这不是 Windows 权限的结果。");
-            Console.WriteLine("  请检查安全软件（如 360、火绒、电脑管家）是否拦截了本程序写注册表。");
+            Console.WriteLine(Lang.Pick("  所有位置都被拒绝，说明整个 HKCU 写入对本程序被拦截。", "  Every location was denied, so HKCU writes are being blocked for this program entirely."));
+            Console.WriteLine(Lang.Pick("  普通用户对自己的 HKCU 有完全控制权，这不是 Windows 权限的结果。", "  An ordinary user has full control over their own HKCU, so this is not a Windows permission."));
+            Console.WriteLine(Lang.Pick("  请检查安全软件（如 360、火绒、电脑管家）是否拦截了本程序写注册表。", "  Check whether security software is blocking this program from writing to the registry."));
         }
         else if (usable < probes.Length)
         {
-            Console.WriteLine("  只有部分位置被拒绝。若被拒的都是右键菜单相关的键，");
-            Console.WriteLine("  则是安全软件针对 shell 扩展注册位置的定向拦截。");
+            Console.WriteLine(Lang.Pick("  只有部分位置被拒绝。若被拒的都是右键菜单相关的键，", "  Only some locations were denied. If the denials are all context-menu related,"));
+            Console.WriteLine(Lang.Pick("  则是安全软件针对 shell 扩展注册位置的定向拦截。", "  it is security software targeting shell-extension registration specifically."));
         }
         else
         {
-            Console.WriteLine("  所有位置都可写，右键菜单应当可以正常安装。");
+            Console.WriteLine(Lang.Pick("  所有位置都可写，右键菜单应当可以正常安装。", "  Every location is writable, so the context menu should install normally."));
         }
 
         return usable > 0 ? 0 : 1;
@@ -889,13 +896,13 @@ internal static class MaintenanceCommands
 
     private static string DescribeDeleteError(int error) => error switch
     {
-        0 => "未提供错误码",
-        2 => "找不到该项目（可能已被删除）",
-        3 => "路径不存在",
-        5 => "拒绝访问：文件可能是只读的，或正被其他程序占用",
-        32 => "文件正被其他程序占用",
-        145 => "目录不是空的：其中有无法删除的项目",
-        _ => $"错误码 {error}",
+        0 => Lang.Pick("未提供错误码", "no error code given"),
+        2 => Lang.Pick("找不到该项目（可能已被删除）", "not found (it may already be deleted)"),
+        3 => Lang.Pick("路径不存在", "the path does not exist"),
+        5 => Lang.Pick("拒绝访问：文件可能是只读的，或正被其他程序占用", "access denied: the file may be read-only, or in use by another program"),
+        32 => Lang.Pick("文件正被其他程序占用", "the file is in use by another program"),
+        145 => Lang.Pick("目录不是空的：其中有无法删除的项目", "the folder is not empty: something inside it could not be deleted"),
+        _ => Lang.Pick($"错误码 {error}", $"error {error}"),
     };
 
     private static long MeasureOne(string path)
@@ -966,19 +973,19 @@ internal static class MaintenanceCommands
         var text = new System.Text.StringBuilder();
 
         text.AppendLine(complete
-            ? $"⚠️即将彻底删除 {paths.Count:N0} 项："
-            : $"⚠️即将彻底删除 {paths.Count:N0} 项（其中部分内容仍在统计）：");
+            ? Lang.Pick($"⚠️即将彻底删除 {paths.Count:N0} 项：", $"⚠️About to permanently delete {paths.Count:N0} items:")
+            : Lang.Pick($"⚠️即将彻底删除 {paths.Count:N0} 项（其中部分内容仍在统计）：", $"⚠️About to permanently delete {paths.Count:N0} items (still counting some of them):"));
 
         text.AppendLine();
-        text.AppendLine(StatRow("包含文件", $"{files:N0} 个"));
-        text.AppendLine(StatRow("包含文件夹", $"{folders:N0} 个"));
-        text.AppendLine(StatRow("共占空间", FormatBytes(bytes)));
+        text.AppendLine(StatRow(Lang.Pick("包含文件", "Files"), Lang.Pick($"{files:N0} 个", $"{files:N0}")));
+        text.AppendLine(StatRow(Lang.Pick("包含文件夹", "Folders"), Lang.Pick($"{folders:N0} 个", $"{folders:N0}")));
+        text.AppendLine(StatRow(Lang.Pick("共占空间", "Total size"), FormatBytes(bytes)));
         text.AppendLine();
-        text.AppendLine("⚠️此操作无法撤销。");
+        text.AppendLine(Lang.Pick("⚠️此操作无法撤销。", "⚠️This cannot be undone."));
         text.AppendLine();
-        text.AppendLine("确定要继续吗？");
+        text.AppendLine(Lang.Pick("确定要继续吗？", "Continue?"));
 
-        return ShowDialog(text.ToString(), "Roboc — 不可恢复的操作", warning: true, ask: true, centre: true);
+        return ShowDialog(text.ToString(), Lang.Pick("Roboc — 不可恢复的操作", "Roboc — Irreversible"), warning: true, ask: true, centre: true);
     }
 
     /// <summary>
@@ -1071,8 +1078,8 @@ internal static class MaintenanceCommands
         if (scan.Conflicts > 0)
         {
             text.AppendLine(scan.Complete
-                ? $"⚠️目标位置已有 {scan.Conflicts:N0} 个同名项目："
-                : $"⚠️目标位置至少有 {scan.Conflicts:N0} 个同名项目（仍在统计中）：");
+                ? Lang.Pick($"⚠️目标位置已有 {scan.Conflicts:N0} 个同名项目：", $"⚠️The destination already has {scan.Conflicts:N0} items with the same name:")
+                : Lang.Pick($"⚠️目标位置至少有 {scan.Conflicts:N0} 个同名项目（仍在统计中）：", $"⚠️The destination has at least {scan.Conflicts:N0} items with the same name (still counting):"));
 
             text.AppendLine();
 
@@ -1081,35 +1088,35 @@ internal static class MaintenanceCommands
                 // Colons rather than full-width spaces. Those spaces lined the numbers
                 // up into columns when the text was left-aligned; centred, every line
                 // is positioned on its own and the columns no longer line up at all.
-                text.AppendLine(StatRow("内容相同", $"{scan.Identical:N0} 个文件"));
+                text.AppendLine(StatRow(Lang.Pick("内容相同", "Identical"), Lang.Pick($"{scan.Identical:N0} 个文件", $"{scan.Identical:N0} files")));
             }
 
             if (scan.Different > 0)
             {
-                text.AppendLine(StatRow("内容不同", $"{scan.Different:N0} 个文件"));
+                text.AppendLine(StatRow(Lang.Pick("内容不同", "Different"), Lang.Pick($"{scan.Different:N0} 个文件", $"{scan.Different:N0} files")));
             }
 
             if (scan.TypeMismatch > 0)
             {
-                text.AppendLine(StatRow("类型不同", $"{scan.TypeMismatch:N0} 个"));
+                text.AppendLine(StatRow(Lang.Pick("类型不同", "Wrong type"), Lang.Pick($"{scan.TypeMismatch:N0} 个", $"{scan.TypeMismatch:N0}")));
             }
 
             if (scan.Bytes > 0)
             {
-                text.AppendLine(StatRow("涉及大小", FormatBytes(scan.Bytes)));
+                text.AppendLine(StatRow(Lang.Pick("涉及大小", "Size involved"), FormatBytes(scan.Bytes)));
             }
         }
         else
         {
-            text.AppendLine("目标位置没有同名项目，将全部作为新增内容粘贴。");
+            text.AppendLine(Lang.Pick("目标位置没有同名项目，将全部作为新增内容粘贴。", "Nothing at the destination shares these names; everything will be pasted as new."));
         }
 
         // 是 and 否 answer the conflicts immediately above them; the additions are a
         // separate piece of news and must not sit between the question and its
         // answers, which is what made the wording ambiguous.
         text.AppendLine();
-        text.AppendLine("是：全部替换为，剪贴板中的版本");
-        text.AppendLine("否：保留原有项目，粘贴新增内容");
+        text.AppendLine(Lang.Pick("是：全部替换为，剪贴板中的版本", "Yes: replace all with the clipboard versions"));
+        text.AppendLine(Lang.Pick("否：保留原有项目，粘贴新增内容", "No: keep what is there and paste only what is new"));
 
         if (scan.NewFiles > 0 || scan.NewFolders > 0 || scan.MergedFolders > 0)
         {
@@ -1117,25 +1124,25 @@ internal static class MaintenanceCommands
 
             if (scan.NewFiles > 0)
             {
-                text.AppendLine(StatRow("将新增文件", $"{scan.NewFiles:N0} 个"));
+                text.AppendLine(StatRow(Lang.Pick("将新增文件", "New files"), Lang.Pick($"{scan.NewFiles:N0} 个", $"{scan.NewFiles:N0}")));
             }
 
             if (scan.NewFolders > 0)
             {
-                text.AppendLine(StatRow("将新增文件夹", $"{scan.NewFolders:N0} 个"));
+                text.AppendLine(StatRow(Lang.Pick("将新增文件夹", "New folders"), Lang.Pick($"{scan.NewFolders:N0} 个", $"{scan.NewFolders:N0}")));
             }
 
             if (scan.MergedFolders > 0)
             {
-                text.AppendLine(StatRow("将合并", $"{scan.MergedFolders:N0} 个同名文件夹"));
+                text.AppendLine(StatRow(Lang.Pick("将合并", "Merged"), Lang.Pick($"{scan.MergedFolders:N0} 个同名文件夹", $"{scan.MergedFolders:N0} folders will be merged")));
             }
         }
 
         text.AppendLine();
-        text.AppendLine("取消：什么都不做");
+        text.AppendLine(Lang.Pick("取消：什么都不做", "Cancel: do nothing"));
 
         return MessageDialog.Show(
-            text.ToString(), "Roboc — 目标已存在同名项目", DialogButtons.YesNoCancel, warning: true, centre: true);
+            text.ToString(), Lang.Pick("Roboc — 目标已存在同名项目", "Roboc — Name already exists at the destination"), DialogButtons.YesNoCancel, warning: true, centre: true);
     }
 
     /// <summary>
@@ -1164,17 +1171,17 @@ internal static class MaintenanceCommands
     private static string DescribeBinError(int error) => error switch
     {
         NativeConst.ERROR_INVALID_DRIVE =>
-            "该位置所在的驱动器不支持独立的 Roboc 回收站",
+            Lang.Pick("该位置所在的驱动器不支持独立的 Roboc 回收站", "the drive cannot hold a separate Roboc recycle bin"),
         NativeConst.ERROR_INVALID_NAME =>
-            "该位置的路径无法映射到回收站中（例如网络路径）",
+            Lang.Pick("该位置的路径无法映射到回收站中（例如网络路径）", "the path cannot be mapped into the bin (a network path, for instance)"),
         NativeConst.ERROR_INVALID_PARAMETER =>
-            "该项目已经在回收站里了，不能重复回收",
+            Lang.Pick("该项目已经在回收站里了，不能重复回收", "this item is already in the bin and cannot be recycled twice"),
             NativeConst.ERROR_ALREADY_EXISTS =>
-                "回收站中这个位置已经有一份了。请先把回收站里的那一份处理掉，" +
-                "否则无法判断该恢复哪一份。",
-        5 => "拒绝访问：无法在所在驱动器建立回收站",
-        32 => "文件正被其他程序占用",
-        _ => $"错误码 {error}",
+                Lang.Pick("回收站中这个位置已经有一份了。请先把回收站里的那一份处理掉，", "The bin already holds something from that location. Deal with that copy first,") +
+                Lang.Pick("否则无法判断该恢复哪一份。", "or there is no way to tell which one to restore."),
+        5 => Lang.Pick("拒绝访问：无法在所在驱动器建立回收站", "access denied: the recycle bin could not be created on that drive"),
+        32 => Lang.Pick("文件正被其他程序占用", "the file is in use by another program"),
+        _ => Lang.Pick($"错误码 {error}", $"error {error}"),
     };
 
     private static string FormatBytes(long bytes)

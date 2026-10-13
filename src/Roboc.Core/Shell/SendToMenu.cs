@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using Roboc.Core.Diagnostics;
 using Roboc.Core.Interop;
+using Roboc.Core.Model;
 
 namespace Roboc.Core.Shell;
 
@@ -29,11 +30,20 @@ public static class SendToMenu
     /// <summary>Marks the shortcuts this program owns, so uninstall removes only its own.</summary>
     private const string NamePrefix = "Roboc ";
 
-    private static readonly (string Name, string Arguments)[] Entries =
+    /// <summary>
+    /// The three shortcuts this program puts in the Send To menu, rebuilt on each access.
+    ///
+    /// Not a static readonly field, for the reason spelled out at ContextMenuInstaller.Verbs
+    /// and checked automatically by scripts/check-static-init.ps1: a static initialiser
+    /// runs on first touch of the type, which happens before the saved language is
+    /// applied, so the names would freeze in the startup language and never follow the
+    /// setting. This one was found by that checker rather than by looking.
+    /// </summary>
+    private static (string Name, string Arguments)[] Entries =>
     [
-        ("复制", "clipboard --gui-errors"),
-        ("回收", "recycle --gui-errors"),
-        ("彻底删除", "purge --gui-errors"),
+        (Lang.Pick("复制", "Copy"), "clipboard --gui-errors"),
+        (Lang.Pick("回收", "Recycle"), "recycle --gui-errors"),
+        (Lang.Pick("彻底删除", "Delete permanently"), "purge --gui-errors"),
     ];
 
     /// <summary>
@@ -49,7 +59,7 @@ public static class SendToMenu
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            failure = $"无法访问发送到目录：{ex.Message}";
+            failure = Lang.Pick($"无法访问发送到目录：{ex.Message}", $"Cannot reach the Send To folder: {ex.Message}");
             log?.Invoke(failure);
             return -1;
         }
@@ -77,7 +87,7 @@ public static class SendToMenu
                 }
                 else
                 {
-                    failure = $"无法创建 {name}：{error}；备用方式也失败：{fallbackError}";
+                    failure = Lang.Pick($"无法创建 {name}：{error}；备用方式也失败：{fallbackError}", $"Cannot create {name}: {error}; the fallback failed too: {fallbackError}");
                     log?.Invoke(failure);
                     return -1;
                 }
@@ -85,7 +95,7 @@ public static class SendToMenu
         }
 
         NotifyShell(log);
-        log?.Invoke($"已在“发送到”菜单中创建 {written} 个入口");
+        log?.Invoke(Lang.Pick($"已在“发送到”菜单中创建 {written} 个入口", $"Created {written} entries in the Send To menu"));
         return written;
     }
 
@@ -112,11 +122,11 @@ public static class SendToMenu
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            log?.Invoke($"移除时出错：{ex.Message}");
+            log?.Invoke(Lang.Pick($"移除时出错：{ex.Message}", $"Error while removing: {ex.Message}"));
         }
 
         NotifyShell(log);
-        log?.Invoke($"已从“发送到”菜单移除 {removed} 个入口");
+        log?.Invoke(Lang.Pick($"已从“发送到”菜单移除 {removed} 个入口", $"Removed {removed} entries from the Send To menu"));
         return removed;
     }
 
@@ -144,7 +154,7 @@ public static class SendToMenu
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
         {
-            log?.Invoke($"通知外壳失败：{ex.Message}");
+            log?.Invoke(Lang.Pick($"通知外壳失败：{ex.Message}", $"Could not notify the shell: {ex.Message}"));
         }
     }
 

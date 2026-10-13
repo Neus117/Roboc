@@ -1,6 +1,7 @@
 using Roboc.Core.Diagnostics;
 using Roboc.Core.Interop;
 using Roboc.Core.Shell;
+using Roboc.Core.Model;
 
 namespace Roboc.Core.Fs;
 
@@ -52,6 +53,27 @@ public static class RecycleBin
     /// <summary>Marker written inside a discarded directory, identifying it as an
     /// item rather than as scaffolding, and telling the user where it came from.</summary>
     public const string MarkerFileName = "Roboc.回收信息.txt";
+
+    /// <summary>
+    /// The "original location" line, in both languages, because the marker is written in
+    /// one language and can be read back in the other.
+    ///
+    /// The program lets the user switch languages at any time, and the marker files
+    /// already sitting in the recycle bin do not change when they do. A reader that
+    /// understood only the current language would silently fail to find the original path
+    /// of everything recycled before the switch, and the item would become unrestorable
+    /// with nothing to explain why. Accepting both costs one extra comparison.
+    ///
+    /// A static readonly field is safe here, unlike the label tables elsewhere in this
+    /// project: these are constants of a file format, not user-facing wording. They must
+    /// not vary with the language setting -- that is exactly what makes the format
+    /// readable across a language change.
+    /// </summary>
+    private static readonly string[] OriginalPathPrefixes =
+    [
+        "原位置：",
+        "Original location: ",
+    ];
 
     /// <summary>
     /// Suffix of the file that records where an item came from.
@@ -170,13 +192,13 @@ public static class RecycleBin
         try
         {
             string text =
-                "此项目由 Roboc 回收。\r\n" +
-                "原位置：" + PathUtil.ToDisplay(originalSource) + "\r\n" +
-                "回收时间：" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "\r\n" +
+                Lang.Pick("此项目由 Roboc 回收。\r\n", "Recycled by Roboc.\r\n") +
+                Lang.Pick("原位置：", "Original location: ") + PathUtil.ToDisplay(originalSource) + "\r\n" +
+                Lang.Pick("回收时间：", "Recycled at:      ") + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "\r\n" +
                 "\r\n" +
-                "取回方法：在资源管理器中选中此项目，右键 Roboc → 回收。\r\n" +
-                "也可以直接把这个项目移回上面的原位置。\r\n" +
-                "删除此文件会导致回收站无法判断该项目应还原到哪里。\r\n";
+                Lang.Pick("取回方法：在资源管理器中选中此项目，右键 Roboc → 回收。\r\n", "To restore: select this item in Explorer and choose Roboc -> Recycle.\r\n") +
+                Lang.Pick("也可以直接把这个项目移回上面的原位置。\r\n", "You can also move it back to the original location shown above.\r\n") +
+                Lang.Pick("删除此文件会导致回收站无法判断该项目应还原到哪里。\r\n", "Deleting this file leaves the bin unable to tell where the item belongs.\r\n");
 
             File.WriteAllText(
                 PathUtil.ToDisplay(SidecarFor(storedExtended)), text, System.Text.Encoding.UTF8);
@@ -229,16 +251,31 @@ public static class RecycleBin
 
             foreach (string line in File.ReadLines(path))
             {
-                const string prefix = "原位置：";
+                // Both languages, always.
+                //
+                // The sidecar is written in whichever language was in force when the item
+                // was recycled, and read back later -- possibly after the user has
+                // switched languages, which this program now lets them do at any time. A
+                // reader that only understood the current language would fail to find the
+                // original path of everything recycled before the switch, and the item
+                // would become unrestorable without any error to explain why.
+                //
+                // Reading both costs one extra comparison and removes the ordering
+                // dependency completely.
+                string? value = null;
 
-                if (line.StartsWith(prefix, StringComparison.Ordinal))
+                foreach (string prefix in OriginalPathPrefixes)
                 {
-                    string value = line[prefix.Length..].Trim();
-
-                    if (value.Length > 0)
+                    if (line.StartsWith(prefix, StringComparison.Ordinal))
                     {
-                        return PathUtil.ToExtended(value);
+                        value = line[prefix.Length..].Trim();
+                        break;
                     }
+                }
+
+                if (!string.IsNullOrEmpty(value))
+                {
+                    return PathUtil.ToExtended(value);
                 }
             }
         }
@@ -477,12 +514,12 @@ public static class RecycleBin
         {
             string marker = storedDirectory + "\\" + MarkerFileName;
             string text =
-                "此目录由 Roboc 回收。\r\n" +
-                "原位置：" + PathUtil.ToDisplay(originalSource) + "\r\n" +
-                "回收时间：" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "\r\n" +
+                Lang.Pick("此目录由 Roboc 回收。\r\n", "Recycled by Roboc.\r\n") +
+                Lang.Pick("原位置：", "Original location: ") + PathUtil.ToDisplay(originalSource) + "\r\n" +
+                Lang.Pick("回收时间：", "Recycled at:      ") + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "\r\n" +
                 "\r\n" +
-                "还原方法：把此目录移回上面的原位置即可。\r\n" +
-                "此文件是识别标记，删除它会导致回收站无法识别此目录。\r\n";
+                Lang.Pick("还原方法：把此目录移回上面的原位置即可。\r\n", "To restore: move this folder back to the original location shown above.\r\n") +
+                Lang.Pick("此文件是识别标记，删除它会导致回收站无法识别此目录。\r\n", "This file is the marker. Deleting it leaves the bin unable to recognise the folder.\r\n");
 
             File.WriteAllText(PathUtil.ToDisplay(marker), text, System.Text.Encoding.UTF8);
         }
@@ -848,10 +885,13 @@ public static class RecycleBin
 
             foreach (string line in File.ReadLines(path))
             {
-                const string prefix = "原位置：";
-                if (line.StartsWith(prefix, StringComparison.Ordinal))
+                // Both languages, always -- see OriginalPathPrefixes.
+                foreach (string prefix in OriginalPathPrefixes)
                 {
-                    return line[prefix.Length..].Trim();
+                    if (line.StartsWith(prefix, StringComparison.Ordinal))
+                    {
+                        return line[prefix.Length..].Trim();
+                    }
                 }
             }
         }

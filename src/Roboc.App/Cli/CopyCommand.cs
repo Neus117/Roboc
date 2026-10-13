@@ -100,7 +100,7 @@ internal static class CopyCommand
         bool fromMenu = args.Flag("--gui-errors");
 
         using ProgressWindow? progressWindow = fromMenu
-            ? ProgressWindow.Start("正在复制", destination, control)
+            ? ProgressWindow.Start(Lang.Pick("正在复制", "Copying"), destination, control)
             : null;
 
         Action<ProgressSnapshot>? onProgress = quiet ? null : new ConsoleProgress().Report;
@@ -118,8 +118,8 @@ internal static class CopyCommand
                     : 0;
 
                 progressWindow.Report(
-                    BuildHeadline(snapshot, "复制", destination),
-                    snapshot.CurrentItem is { Length: > 0 } item ? Shorten(item) : "正在准备…",
+                    BuildHeadline(snapshot, move, destination),
+                    snapshot.CurrentItem is { Length: > 0 } item ? Shorten(item) : Lang.Pick("正在准备…", "Preparing..."),
                     remaining,
                     Math.Max(0, snapshot.BytesTotal - snapshot.BytesDone),
                     (long)snapshot.BytesPerSecond,
@@ -241,16 +241,30 @@ internal static class CopyCommand
     /// <summary>
     /// The line Explorer puts first: how many items, and between which folders. It
     /// answers "what is happening" before the numbers answer "how far along".
+    ///
+    /// <b>Two whole sentences, not one sentence with a shared verb.</b> This used to take
+    /// a verb argument and slot it into both languages, on the assumption that the verb
+    /// sits in the same place in each. It does not: Chinese puts it between the source and
+    /// the destination with a trailing 到, while English puts "to" in that position and
+    /// needs no verb at all. Sharing the verb produced
+    /// "Copying 8 items from send-test Copyto receive-test" -- which is what a sentence
+    /// looks like when it has been assembled rather than written.
     /// </summary>
-    private static string BuildHeadline(ProgressSnapshot snapshot, string verb, string destination)
+    private static string BuildHeadline(ProgressSnapshot snapshot, bool moving, string destination)
     {
         string from = snapshot.CurrentItem is { Length: > 0 } item
             ? Path.GetFileName(Path.GetDirectoryName(item) ?? item)
             : "…";
 
-        string count = snapshot.HasTotals ? $"{snapshot.FilesTotal:N0} 个项目" : "所选项目";
+        string to = Path.GetFileName(destination.TrimEnd('\\'));
 
-        return $"正在将 {count}从 {from} {verb}到 {Path.GetFileName(destination.TrimEnd('\\'))}";
+        string count = snapshot.HasTotals
+            ? Lang.Pick($"{snapshot.FilesTotal:N0} 个项目", $"{snapshot.FilesTotal:N0} items")
+            : Lang.Pick("所选项目", "the selection");
+
+        return moving
+            ? Lang.Pick($"正在将 {count}从 {from} 移动到 {to}", $"Moving {count} from {from} to {to}")
+            : Lang.Pick($"正在将 {count}从 {from} 复制到 {to}", $"Copying {count} from {from} to {to}");
     }
     /// <summary>
     /// Trims a path to something that fits a small window, keeping the end -- the
@@ -283,7 +297,7 @@ internal static class CopyCommand
         }
 
         var text = new System.Text.StringBuilder();
-        text.AppendLine($"⚠️复制 {result.FilesCopied:N0} 项成功，{result.FilesFailed:N0} 项失败。");
+        text.AppendLine(Lang.Pick($"⚠️复制 {result.FilesCopied:N0} 项成功，{result.FilesFailed:N0} 项失败。", $"⚠️{result.FilesCopied:N0} copied, {result.FilesFailed:N0} failed."));
         text.AppendLine();
 
         foreach (JobError error in result.Errors.Take(8))
@@ -294,12 +308,12 @@ internal static class CopyCommand
 
         if (result.Errors.Count > 8)
         {
-            text.AppendLine($"…另有 {result.Errors.Count - 8} 条错误未显示");
+            text.AppendLine(Lang.Pick($"…另有 {result.Errors.Count - 8} 条错误未显示", $"...{result.Errors.Count - 8} more errors not shown"));
         }
 
         if (result.Errors.Count == 0 && result.FilesFailed > 0)
         {
-            text.AppendLine("（未记录具体错误，请用 --show-journal 查看日志位置）");
+            text.AppendLine(Lang.Pick("（未记录具体错误，请用 --show-journal 查看日志位置）", "(no specific errors were recorded; use --show-journal to find the log)"));
         }
 
         MaintenanceCommands.ReportProblemPublic(true, text.ToString());

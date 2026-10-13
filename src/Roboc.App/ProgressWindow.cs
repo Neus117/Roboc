@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using Roboc.Core.Interop;
+using Roboc.Core.Model;
 
 namespace Roboc.App;
 
@@ -64,7 +65,7 @@ internal sealed class ProgressWindow : IDisposable
     private volatile bool _stop;
     private bool _cancelArmed;
     private volatile bool _paused;
-    private string _pauseLabel = "暂停";
+    private string _pauseLabel = Lang.Pick("暂停", "Pause");
     private int _refreshCount;
     private int _distinctPercents;
     private long _lastPercent = long.MinValue;
@@ -282,8 +283,8 @@ internal sealed class ProgressWindow : IDisposable
         // Windows 11 card rendered as Windows 95 grey rectangles. Reusing the dialog's
         // painter rather than writing a second one is what keeps them identical.
         _font = font;
-        _cancelButton = CreateChild("BUTTON", "取消", 0, 0, 100, 32, font, IdCancel, ownerDrawn: true);
-        _pauseButton = CreateChild("BUTTON", "暂停", 0, 0, 100, 32, font, IdPause, ownerDrawn: true);
+        _cancelButton = CreateChild("BUTTON", Lang.Pick("取消", "Cancel"), 0, 0, 100, 32, font, IdCancel, ownerDrawn: true);
+        _pauseButton = CreateChild("BUTTON", Lang.Pick("暂停", "Pause"), 0, 0, 100, 32, font, IdPause, ownerDrawn: true);
 
         // No STATIC controls: the card draws its own text. A child window paints
         // after its parent, so any label left here would sit on top of the custom
@@ -444,14 +445,14 @@ internal sealed class ProgressWindow : IDisposable
         if (_control.IsPaused)
         {
             _control.Resume();
-            _pauseLabel = "暂停";
+            _pauseLabel = Lang.Pick("暂停", "Pause");
             InvalidateRect(_pauseButton, 0, 1);
             _paused = false;
         }
         else
         {
             _control.Pause();
-            _pauseLabel = "继续";
+            _pauseLabel = Lang.Pick("继续", "Resume");
             InvalidateRect(_pauseButton, 0, 1);
             _paused = true;
         }
@@ -471,8 +472,8 @@ internal sealed class ProgressWindow : IDisposable
         // be the one prompt in the program with the system's font and the system's
         // corners, appearing directly on top of a card that has neither.
         int answer = MessageDialog.Show(
-            "⚠️确定要停止当前操作吗？\r\n\r\n已经完成的项目会保留，尚未处理的会被放弃。",
-            "Roboc — 停止操作",
+            Lang.Pick("⚠️确定要停止当前操作吗？\r\n\r\n已经完成的项目会保留，尚未处理的会被放弃。", "⚠️Stop this operation?\r\n\r\nItems already finished are kept; anything not yet started is abandoned."),
+            Lang.Pick("Roboc — 停止操作", "Roboc — Stop"),
             DialogButtons.YesNo,
             warning: true,
             centre: true);
@@ -483,7 +484,7 @@ internal sealed class ProgressWindow : IDisposable
         }
 
         _cancelArmed = true;
-        _phase = "正在停止…";
+        _phase = Lang.Pick("正在停止…", "Stopping...");
         _control.Cancel();
     }
 
@@ -505,7 +506,7 @@ internal sealed class ProgressWindow : IDisposable
 
         if (_phase.Length > 0)
         {
-            text.AppendLine($"名称: {_phase}");
+            text.AppendLine(Lang.Pick($"名称: {_phase}", $"Name: {_phase}"));
         }
 
         // Suppressed until an estimate exists: "大约 0 秒" on the first tick reads as
@@ -513,15 +514,15 @@ internal sealed class ProgressWindow : IDisposable
         if (seconds >= 0)
         {
             text.AppendLine(seconds >= 60
-                ? $"剩余时间: 大约 {seconds / 60} 分 {seconds % 60} 秒"
-                : $"剩余时间: 大约 {seconds} 秒");
+                ? Lang.Pick($"剩余时间: 大约 {seconds / 60} 分 {seconds % 60} 秒", $"Time left: about {seconds / 60} min {seconds % 60} s")
+                : Lang.Pick($"剩余时间: 大约 {seconds} 秒", $"Time left: about {seconds} s"));
         }
 
-        text.AppendLine($"剩余项目: {items:N0} ({FormatBytes(bytes)})");
+        text.AppendLine(Lang.Pick($"剩余项目: {items:N0} ({FormatBytes(bytes)})", $"Items left: {items:N0} ({FormatBytes(bytes)})"));
 
         if (speed > 0)
         {
-            text.AppendLine($"速度: {FormatBytes(speed)}/秒");
+            text.AppendLine(Lang.Pick($"速度: {FormatBytes(speed)}/秒", $"Speed: {FormatBytes(speed)}/s"));
         }
 
         // Built by the renderer now; the buffer below is no longer needed for it.
@@ -582,7 +583,7 @@ internal sealed class ProgressWindow : IDisposable
 
         bool pressed = (item.itemState & 0x0001) != 0;   // ODS_SELECTED
         bool isPause = item.CtlID == IdPause;
-        string label = isPause ? _pauseLabel : "取消";
+        string label = isPause ? _pauseLabel : Lang.Pick("取消", "Cancel");
 
         // While paused, 继续 is the action the card is recommending -- it is how the
         // user gets the work moving again, and the accent colour is how Windows 11
@@ -700,11 +701,10 @@ internal sealed class ProgressWindow : IDisposable
         // leaking three per repaint at five repaints a second exhausts that quota in
         // minutes -- after which every drawing call fails silently and the card goes
         // blank rather than wrong, which is far harder to diagnose.
-        nint track = CreateRoundRectRgn(x, y, x + width + 1, y + height + 1, height, height);
-        nint trackBrush = CreateSolidBrush(palette.Track);
-        FillRgn(dc, track, trackBrush);
-        DeleteObject(trackBrush);
-        DeleteObject(track);
+        // The bar is a capsule, so its radius is half its height -- exactly the case a GDI
+        // region handles worst. A region cannot express a curve, only whole pixels, so the
+        // two rounded ends came out as visible steps.
+        RoundedBox.Draw(dc, x, y, width, height, height, palette.Track, null);
 
         if (percent <= 0)
         {
@@ -718,11 +718,7 @@ internal sealed class ProgressWindow : IDisposable
             filled = height;   // Below this the rounded cap degrades into a smudge.
         }
 
-        nint fill = CreateRoundRectRgn(x, y, x + filled + 1, y + height + 1, height, height);
-        nint fillBrush = CreateSolidBrush(palette.Accent);
-        FillRgn(dc, fill, fillBrush);
-        DeleteObject(fillBrush);
-        DeleteObject(fill);
+        RoundedBox.Draw(dc, x, y, filled, height, height, palette.Accent, null);
     }
 
     /// <summary>
@@ -742,19 +738,9 @@ internal sealed class ProgressWindow : IDisposable
     private void DrawGraph(
         nint dc, int x, int y, int width, int height, ProgressTheme.Palette palette)
     {
-        nint background = CreateRoundRectRgn(x, y, x + width + 1, y + height + 1, 8, 8);
-        nint backgroundBrush = CreateSolidBrush(palette.Track);
-        FillRgn(dc, background, backgroundBrush);
-        DeleteObject(backgroundBrush);
-
-        // A one-pixel outline, so the plot area has a visible edge instead of fading
-        // into the card at the corners where the rounded region is thin.
-        nint borderRegion = CreateRoundRectRgn(x, y, x + width + 1, y + height + 1, 8, 8);
-        nint borderBrush = CreateSolidBrush(palette.Border);
-        FrameRgn(dc, borderRegion, borderBrush, 1, 1);
-        DeleteObject(borderBrush);
-        DeleteObject(borderRegion);
-        DeleteObject(background);
+        // Filled and outlined in one pass, so the outline follows the same curve the fill
+        // does. Drawn separately, the two would disagree by a pixel at every corner.
+        RoundedBox.Draw(dc, x, y, width, height, 8, palette.Track, palette.Border);
 
 
         int count = _historyCount;
@@ -923,8 +909,8 @@ internal sealed class ProgressWindow : IDisposable
         // Percentage, in the large face the native dialog uses for it.
         SelectObject(dc, _bigFont);
         string percentText = _paused
-            ? "已暂停"
-            : percent >= 0 ? $"已完成 {percent}%" : "正在准备…";
+            ? Lang.Pick("已暂停", "Paused")
+            : percent >= 0 ? Lang.Pick($"已完成 {percent}%", $"{percent}% done") : Lang.Pick("正在准备…", "Preparing...");
 
         TextOut(dc, margin, Scaled(46, _dpi), percentText, percentText.Length);
 
@@ -945,20 +931,20 @@ internal sealed class ProgressWindow : IDisposable
         }
 
         int y = Scaled(250, _dpi);
-        string left = $"剩余项目 {items:N0} ({FormatBytes(bytes)})";
+        string left = Lang.Pick($"剩余项目 {items:N0} ({FormatBytes(bytes)})", $"{items:N0} left ({FormatBytes(bytes)})");
         TextOut(dc, margin, y, left, left.Length);
 
         if (speed > 0)
         {
-            string rate = $"速度 {FormatBytes(speed)}/秒";
+            string rate = Lang.Pick($"速度 {FormatBytes(speed)}/秒", $"{FormatBytes(speed)}/s");
             TextOut(dc, margin, y + Scaled(26, _dpi), rate, rate.Length);
         }
 
         if (seconds >= 0)
         {
             string eta = seconds >= 60
-                ? $"剩余时间 大约 {seconds / 60} 分 {seconds % 60} 秒"
-                : $"剩余时间 大约 {seconds} 秒";
+                ? Lang.Pick($"剩余时间 大约 {seconds / 60} 分 {seconds % 60} 秒", $"about {seconds / 60} min {seconds % 60} s left")
+                : Lang.Pick($"剩余时间 大约 {seconds} 秒", $"about {seconds} s left");
 
             TextOut(dc, margin, y + Scaled(52, _dpi), eta, eta.Length);
         }
@@ -1144,11 +1130,6 @@ internal sealed class ProgressWindow : IDisposable
     [DllImport("gdi32.dll")] private static extern int DeleteObject(nint obj);
     [DllImport("gdi32.dll")] private static extern int BitBlt(
         nint dest, int x, int y, int width, int height, nint source, int sx, int sy, uint rop);
-    [DllImport("gdi32.dll")] private static extern nint CreateSolidBrush(uint color);
-    [DllImport("gdi32.dll")] private static extern nint CreatePen(int style, int width, uint color);
-    [DllImport("gdi32.dll")] private static extern nint CreateRoundRectRgn(
-        int left, int top, int right, int bottom, int width, int height);
-    [DllImport("gdi32.dll")] private static extern int FillRgn(nint dc, nint region, nint brush);
     [DllImport("user32.dll")] private static extern int FillRect(nint dc, ref RECT rect, nint brush);
     [DllImport("gdi32.dll")] private static extern int Polygon(nint dc, POINT[] points, int count);
     [DllImport("gdi32.dll")] private static extern int Polyline(nint dc, POINT[] points, int count);
@@ -1179,10 +1160,6 @@ internal sealed class ProgressWindow : IDisposable
 
     [DllImport("user32.dll")] private static extern nint BeginPaint(nint hwnd, out PAINTSTRUCT paint);
     [DllImport("user32.dll")] private static extern int EndPaint(nint hwnd, ref PAINTSTRUCT paint);
-    [DllImport("gdi32.dll")] private static extern int MoveToEx(nint dc, int x, int y, nint previous);
-    [DllImport("gdi32.dll")] private static extern int LineTo(nint dc, int x, int y);
-    [DllImport("gdi32.dll")] private static extern int FrameRgn(
-        nint dc, nint region, nint brush, int width, int height);
     [DllImport("gdi32.dll")] private static extern int BeginPath(nint dc);
     [DllImport("gdi32.dll")] private static extern int EndPath(nint dc);
     [DllImport("gdi32.dll")] private static extern int PolyBezierTo(nint dc, POINT[] points, int count);
@@ -1194,6 +1171,11 @@ internal sealed class ProgressWindow : IDisposable
 
     [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(
         nint hwnd, int attribute, ref int value, int size);
+
+    [DllImport("gdi32.dll")] private static extern nint CreateSolidBrush(uint color);
+    [DllImport("gdi32.dll")] private static extern nint CreatePen(int style, int width, uint color);
+    [DllImport("gdi32.dll")] private static extern int MoveToEx(nint dc, int x, int y, nint previous);
+    [DllImport("gdi32.dll")] private static extern int LineTo(nint dc, int x, int y);
 
     private static int TextOut(nint dc, int x, int y, string text, int length)
         => text.Length == 0 ? 0 : TextOutW(dc, x, y, text, text.Length);

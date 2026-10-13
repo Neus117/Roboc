@@ -73,6 +73,14 @@ internal static class SettingsWindow
         // Logical pixels at 96 DPI, following the rhythm in the developer document.
         private const int Margin = 24;
         private const int RowHeight = 30;
+
+        // The language row sits above the switches rather than among them.
+        //
+        // It is not a switch -- it has two states and neither is "off" -- and putting it
+        // in the same column as five checkboxes would invite the reading that Chinese is
+        // the checked state. It is also the one control someone looks for when the window
+        // has opened in a language they do not read, so it goes first.
+        private const int LanguageRowHeight = 34;
         private const int RowsTop = 20;
         private const int BoxSize = 16;
         private const int ButtonWidth = 96;
@@ -81,7 +89,7 @@ internal static class SettingsWindow
         private int _paneHeight;
 
         private readonly RobocSettings _working;
-        private readonly IReadOnlyList<SettingInfo> _rows = RobocSettings.Catalogue;
+        private readonly IReadOnlyList<SettingInfo> _rows = RobocSettings.Catalogue();
 
         private nint _window;
         private nint _bodyFont;
@@ -92,6 +100,9 @@ internal static class SettingsWindow
         private int _height;
 
         private int _selected;
+
+        /// <summary>0 = 中文, 1 = English. Mirrors _working.Language.</summary>
+        private int _languageChoice;
         private bool _accepted;
         private int _hotButton = -1;
         private int _pressedButton = -1;
@@ -106,12 +117,13 @@ internal static class SettingsWindow
         internal SettingsOutcome Run()
         {
             _dpi = SystemDpi();
+            _languageChoice = _working.Language == "en" ? 1 : 0;
             _width = Scaled(560);
 
             // Sized for the longest description, not the selected one. A window that
             // grows and shrinks as rows are clicked is worse than one with slack in it,
             // and the slack is a few millimetres.
-            _paneTop = Scaled(RowsTop + (RowHeight * _rows.Count) + 16);
+            _paneTop = Scaled(RowsTop + LanguageRowHeight + (RowHeight * _rows.Count) + 16);
             _paneHeight = MeasurePane(_width);
             _height = _paneTop + _paneHeight + Scaled(76);
 
@@ -138,7 +150,7 @@ internal static class SettingsWindow
             int h = frame.Bottom - frame.Top;
 
             _window = CreateWindowExW(
-                0, "RobocSettings", "Roboc 设置",
+                0, "RobocSettings", Lang.Pick("Roboc 设置", "Roboc Settings"),
                 style | WS_VISIBLE,
                 (GetSystemMetrics(0) - w) / 2, (GetSystemMetrics(1) - h) / 2,
                 w, h, 0, 0, wc.hInstance, 0);
@@ -173,9 +185,9 @@ internal static class SettingsWindow
             if (!_working.Save(out string error))
             {
                 MessageDialog.Show(
-                    $"⚠️设置无法保存：\r\n\r\n{error}\r\n\r\n" +
-                    "程序仍按原有设置运行。",
-                    "Roboc — 保存失败",
+                    Lang.Pick($"⚠️设置无法保存：\r\n\r\n{error}\r\n\r\n", $"⚠️Settings could not be saved:\r\n\r\n{error}\r\n\r\n") +
+                    Lang.Pick("程序仍按原有设置运行。", "The program will carry on with the settings it already had."),
+                    Lang.Pick("Roboc — 保存失败", "Roboc — Save failed"),
                     DialogButtons.Acknowledge,
                     warning: true);
 
@@ -254,9 +266,32 @@ internal static class SettingsWindow
             => ((int)(lParam & 0xFFFF), (int)((lParam >> 16) & 0xFFFF));
 
         /// <summary>Which switch row a point falls in, or -1.</summary>
-        private int HitRow((int X, int Y) point)
+        /// <summary>Which half of the language row a point falls in, or -1.</summary>
+        private int HitLanguage((int X, int Y) point)
         {
             int top = Scaled(RowsTop);
+            int height = Scaled(LanguageRowHeight);
+
+            if (point.Y < top || point.Y >= top + height)
+            {
+                return -1;
+            }
+
+            (int firstLeft, int firstWidth) = LanguageSegment(0);
+            return point.X < firstLeft + firstWidth ? 0 : 1;
+        }
+
+        /// <summary>The rectangle of one language segment, in physical pixels.</summary>
+        private (int Left, int Width) LanguageSegment(int index)
+        {
+            int margin = Scaled(Margin);
+            int left = margin + Scaled(150) + (index * Scaled(84));
+            return (left, Scaled(84));
+        }
+
+        private int HitRow((int X, int Y) point)
+        {
+            int top = Scaled(RowsTop + LanguageRowHeight);
             int height = Scaled(RowHeight);
 
             if (point.Y < top || point.Y >= top + (height * _rows.Count))
@@ -274,7 +309,7 @@ internal static class SettingsWindow
 
         private void Hot((int X, int Y) point)
         {
-            int row = HitRow(point);
+            int row = HitLanguage(point) >= 0 ? -1 : HitRow(point);
             int button = HitButton(point);
 
             if (row >= 0 && _selected != row)
@@ -292,6 +327,25 @@ internal static class SettingsWindow
 
         private void Released((int X, int Y) point)
         {
+            // The language row is tested first: it sits above the switches and its
+            // segments are narrower than a row, so a row test would never match it, but
+            // ordering it first says so rather than leaving it to arithmetic.
+            int language = HitLanguage(point);
+
+            if (language >= 0 && language != _languageChoice)
+            {
+                _languageChoice = language;
+
+                // Applied immediately, so the new wording is visible in this very window
+                // rather than only after a restart. Lang is process-wide, so this is all
+                // it takes -- the window redraws from its own paint handler.
+                Lang.Apply(language == 0 ? "zh" : "en");
+                _working.Language = language == 0 ? "zh" : "en";
+
+                InvalidateRect(_window, 0, 1);
+                return;
+            }
+
             int row = HitRow(point);
 
             if (row >= 0)
@@ -394,6 +448,7 @@ internal static class SettingsWindow
 
             Fill(buffer, 0, 0, width, height, palette.Window);
 
+            DrawLanguageRow(buffer, palette);
             DrawRows(buffer, palette);
             DrawPane(buffer, width, palette);
             DrawButtons(buffer, palette);
@@ -406,13 +461,78 @@ internal static class SettingsWindow
             ReleaseDC(hwnd, screen);
         }
 
+        /// <summary>
+        /// The language row: a label and two segments, the active one filled.
+        ///
+        /// Drawn as two segments rather than as a checkbox on purpose. A checkbox has two
+        /// states and one of them is "off", which is the wrong idea here -- neither
+        /// language is a feature being disabled. Two side-by-side segments show the choice
+        /// and the current answer at the same time, which is also what makes this usable
+        /// by someone who has just been shown a window in a language they cannot read.
+        /// </summary>
+        private void DrawLanguageRow(nint dc, ProgressTheme.Palette palette)
+        {
+            int margin = Scaled(Margin);
+            int top = Scaled(RowsTop);
+            int height = Scaled(LanguageRowHeight);
+            int segmentHeight = Scaled(26);
+            int segmentTop = top + ((height - segmentHeight) / 2);
+
+            SetBkMode(dc, 1);
+
+            nint old = SelectObject(dc, BodyFont());
+            SetTextColor(dc, palette.Text);
+
+            string label = Lang.Pick("界面语言", "Language");
+
+            RECT text = new()
+            {
+                Left = margin,
+                Top = top,
+                Right = margin + Scaled(150),
+                Bottom = top + height,
+            };
+
+            DrawTextW(dc, label, label.Length, ref text, 0x00000004 | 0x00000020 | 0x00000800);
+
+            for (int i = 0; i < 2; i++)
+            {
+                (int left, int width) = LanguageSegment(i);
+                bool active = i == _languageChoice;
+
+                int radius = Scaled(6);
+                RoundedBox.Draw(
+                    dc, left, segmentTop, width, segmentHeight, radius,
+                    active ? palette.Accent : palette.Track,
+                    active ? palette.Accent : palette.Border);
+
+                // The inactive label is drawn in the ordinary text colour and the active
+                // one in white, because the accent fill is dark enough in both themes to
+                // carry white text and light enough not to swallow dark text elsewhere.
+                string caption = i == 0 ? "中文" : "English";
+                SetTextColor(dc, active ? 0x00FFFFFFu : palette.Text);
+
+                RECT box = new()
+                {
+                    Left = left,
+                    Top = segmentTop,
+                    Right = left + width,
+                    Bottom = segmentTop + segmentHeight,
+                };
+
+                DrawTextW(dc, caption, caption.Length, ref box,
+                    0x00000001 | 0x00000004 | 0x00000020 | 0x00000800);
+            }
+
+            SelectObject(dc, old);
+        }
         private void DrawRows(nint dc, ProgressTheme.Palette palette)
         {
             SetBkMode(dc, 1);
 
             int margin = Scaled(Margin);
             int box = Scaled(BoxSize);
-            int top = Scaled(RowsTop);
+            int top = Scaled(RowsTop + LanguageRowHeight);
             int rowHeight = Scaled(RowHeight);
 
             for (int i = 0; i < _rows.Count; i++)
@@ -449,7 +569,7 @@ internal static class SettingsWindow
                 // The default is stated on every row, because "what does this do" and
                 // "what did it do before I touched it" are different questions and only
                 // the second one lets someone undo an experiment.
-                string marker = info.Default ? "默认：开" : "默认：关";
+                string marker = info.Default ? Lang.Pick("默认：开", "default: on") : Lang.Pick("默认：关", "default: off");
                 SetTextColor(dc, palette.SecondaryText);
 
                 RECT tag = new()
@@ -476,15 +596,10 @@ internal static class SettingsWindow
         {
             int radius = Scaled(4);
 
-            nint region = CreateRoundRectRgn(left, top, left + size + 1, top + size + 1, radius, radius);
-            nint fill = CreateSolidBrush(on ? palette.Accent : palette.Window);
-            FillRgn(dc, region, fill);
-            DeleteObject(fill);
-
-            nint edge = CreateSolidBrush(on ? palette.Accent : palette.Border);
-            FrameRgn(dc, region, edge, 1, 1);
-            DeleteObject(edge);
-            DeleteObject(region);
+            RoundedBox.Draw(
+                dc, left, top, size, size, radius,
+                on ? palette.Accent : palette.Window,
+                on ? palette.Accent : palette.Border);
 
             if (!on)
             {
@@ -526,17 +641,9 @@ internal static class SettingsWindow
             int inset = margin + Scaled(12);
             int gap = Scaled(10);
 
-            nint region = CreateRoundRectRgn(
-                margin, top, width - margin + 1, top + paneHeight + 1, Scaled(8), Scaled(8));
-
-            nint fill = CreateSolidBrush(palette.Track);
-            FillRgn(dc, region, fill);
-            DeleteObject(fill);
-
-            nint edge = CreateSolidBrush(palette.Border);
-            FrameRgn(dc, region, edge, 1, 1);
-            DeleteObject(edge);
-            DeleteObject(region);
+            RoundedBox.Draw(
+                dc, margin, top, width - (margin * 2), paneHeight, Scaled(8),
+                palette.Track, palette.Border);
 
             SettingInfo info = _rows[Math.Clamp(_selected, 0, _rows.Count - 1)];
 
@@ -622,7 +729,7 @@ internal static class SettingsWindow
 
         private void DrawButtons(nint dc, ProgressTheme.Palette palette)
         {
-            string[] labels = ["卸载", "取消", "确定"];
+            string[] labels = [Lang.Pick("卸载", "Remove"), Lang.Pick("取消", "Cancel"), Lang.Pick("确定", "OK")];
             int top = ButtonTop;
             int height = Scaled(ButtonHeight);
 
@@ -838,15 +945,8 @@ internal static class SettingsWindow
     [DllImport("gdi32.dll")]
     private static extern nint CreateSolidBrush(uint color);
 
-    [DllImport("gdi32.dll")]
-    private static extern nint CreateRoundRectRgn(
-        int left, int top, int right, int bottom, int width, int height);
 
-    [DllImport("gdi32.dll")]
-    private static extern int FillRgn(nint dc, nint region, nint brush);
 
-    [DllImport("gdi32.dll")]
-    private static extern int FrameRgn(nint dc, nint region, nint brush, int width, int height);
 
     [DllImport("user32.dll")]
     private static extern int FillRect(nint dc, ref RECT rect, nint brush);
