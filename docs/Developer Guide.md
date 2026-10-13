@@ -581,10 +581,11 @@ two to three times faster than PowerShell at deleting.**
 
 **Copyright holder: Neus117.** See `LICENSE` and `NOTICE`.
 
-**Why Apache-2.0 rather than MIT**: section 6 **explicitly grants no trademark rights**. This
-project is intended for the Microsoft Store and for paid support, and **the "free and open
-source, paying supports the author" model does not depend on exclusivity** — it depends on
-people knowing that this is the author's own release. **Code can be copied; trust cannot.**
+**Why Apache-2.0 rather than MIT**: section 6 **explicitly grants no trademark rights**. A
+permissive licence lets anyone use, modify or even resell this code, and **the only boundary
+left is the name** — "Roboc" identifies the original work and its official distributions, so
+a fork may say it is based on Roboc but may not call itself Roboc. **Code can be copied;
+provenance cannot.**
 
 **On "open source cannot stop someone else selling it"**: every OSI-approved licence permits
 commercial sale; that is part of the definition. **What protects a commercial interest is a

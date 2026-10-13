@@ -187,12 +187,6 @@ of the licence grants no trademark rights**, so:
 **Official channels**: the only official source for this program is the
 [GitHub repository](https://github.com/Neus117/Roboc).
 
-<!-- TODO: Microsoft Store link once published -->
-
-**About paying**: this program is **free and open source**, and every version from an official
-channel is **functionally identical**. If a paid version appears, **it is a way of supporting
-the author, not a licence purchase**.
-
 **Please obtain it only from the channels above.** The licence permits anyone to use, modify
 and even resell this code, so **any program with the same or a different name from any other
 source was not published by this author**. Third-party distributions get no support, and the
