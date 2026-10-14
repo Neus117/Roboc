@@ -20,8 +20,8 @@ paste, delete and recycle by performance-first means.
 | Platform | Windows 11, .NET 10 |
 | Language | C#, hand-written Win32 P/Invoke, **no MSVC, no NativeAOT, no COM shell extension** |
 | Artefact | `artifacts/portable/Roboc.exe`, **a single 12.5 MB file** |
-| Code | 51 files, ~17,000 lines (Core 10,373 / App 6,410) |
-| Self-test | **23 checks**, `--selftest` |
+| Code | 57 `.cs` files, 20,388 lines (Core 11,382 / App 9,006), excluding `bin`, `obj` and `tools\Roboc.CorpusGen` |
+| Self-test | **25 checks**, `--selftest` |
 | Test machine | i7-12800HX, 31.7 GB RAM, 2560×1600 at 175% (DPI 168) |
 
 **There is no MSVC on the development machine.** That rules out NativeAOT, a native DLL and a
@@ -114,23 +114,28 @@ Roboc/
 ├── .editorconfig             ★ .ps1 needs a BOM — the rule came from real failures
 ├── .gitattributes            Line-ending policy, binary markers
 ├── .github/workflows/        CI: build, publish, self-test, three checks
-├── assets/icons/             Menu icons (copied into the package at build time)
+├── assets/icons/             Menu icons (copied into the package at build time, see below)
 ├── docs/                     User Guide · Developer Guide · Chinese originals · images
 ├── scripts/                  Benchmarks and checks (results/ is gitignored)
-├── src/Roboc.Core/           No UI dependency
-│   ├── Copy/                 CopyEngine · FileCopier · OverlappedPipeline · Verifier
+│   ├── check-wiring.ps1      Wiring check (section 7, rules 2 and 3)
+│   ├── run-bench.ps1         Benchmark run
+│   ├── run-perf.ps1          Head-to-head performance run
+│   └── disk-full-test.ps1    Disk-full behaviour (needs elevation)
+├── src/Roboc.Core/           10,373 lines — no UI dependency
+│   ├── Copy/                 CopyEngine 1132 · FileCopier 681 · OverlappedPipeline · Verifier
 │   ├── Delete/               DeleteEngine · FastDeleter
-│   ├── Fs/                   RecycleBin · AlternateStreams · ReparsePoints · DirectoryOps · PathUtil
-│   ├── Shell/                ContextMenuInstaller · BinIndex · SendToMenu
-│   ├── Journal/              JobJournal
+│   ├── Fs/                   RecycleBin 993 · AlternateStreams · ReparsePoints · DirectoryOps · PathUtil
+│   ├── Shell/                ContextMenuInstaller 805 · BinIndex · SendToMenu
+│   ├── Journal/              JobJournal 532
 │   ├── Interop/              Kernel32 · Ntdll · NativeConst · NativeStruct
 │   ├── Model/                CopyOptions · RobocSettings · Lang · JobTypes
-│   └── Diagnostics/          SelfTest · NativeError · Watchdog
-├── src/Roboc.App/            CLI and UI
-│   ├── ProgressWindow · MessageDialog · SettingsWindow · ProgressTheme · RoundedBox · AppIcon
-│   └── Cli/                  MaintenanceCommands · ShellCommand · CopyCommand · DeleteCommand
-│                             UninstallCommand · Args · PendingSelection · ExplorerSelection
-└── tools/Roboc.CorpusGen/    Benchmark corpus generator
+│   └── Diagnostics/          SelfTest 732 · NativeError · Watchdog
+├── src/Roboc.App/            6,410 lines — CLI and UI
+│   ├── ProgressWindow 1303 · MessageDialog 820 · SettingsWindow · ProgressTheme · RoundedBox · AppIcon
+│   └── Cli/                  MaintenanceCommands 1188 · ShellCommand 531 · CopyCommand
+│                             UninstallCommand · DeleteCommand · Args · PendingSelection
+│                             ExplorerSelection · ConflictScan
+└── tools/Roboc.CorpusGen/    Benchmark corpus generator (the usual place for a helper tool)
 ```
 
 ## The two icon mechanisms
@@ -174,29 +179,39 @@ fifteen seconds).
 
 # 4. Design decisions and why
 
+**This section records the "why not"s.** Every entry stands for something that was measured,
+or for something that broke once.
+
 ## Deletion
 
 | Decision | Reason |
 |---|---|
-| **Three guards on `delete`** | Drive-relative paths, volume roots, the program's own folder — see section 6 |
+| **Three guards on `delete`** | `GuardDriveRelative`, `GuardAgainstVolumeRoot` and `GuardAgainstSelf` — drive-relative paths, volume roots, the program's own folder (section 6) |
 | **`--yes` required** | Deleting is irreversible; an argument that deletes without confirmation is an argument that deletes by accident |
+| **`--yes` is the only route to emptying the bin** | It used to accept `--gui-errors` in its place, on the grounds that "the menu path shows a confirmation dialog" — **but the menu never passes `--empty`, so that dialog is unreachable and the exemption was a back door to emptying the bin with no confirmation at all** |
+| **Recycling is the default**; `--direct` is what makes a delete permanent | |
 | **Recycle refuses a duplicate** | Two copies of the same original path make it impossible to know which to restore |
+| **An item already in the bin cannot be recycled again** | The program explains why and offers to take it back instead — a static verb's label cannot change with the selection, and `AppliesTo` does not work |
 
 ## Copying
 
 | Decision | Reason |
 |---|---|
-| **Atomic publication on by default** | The destination path is never observed half-written |
+| **Atomic publication on by default**: stage, then rename through `FileRenameInfoEx` (POSIX rename semantics) | The destination path is never observed half-written |
+| **Below `LargeFileThreshold` (2 MB) with no destination in the way, write straight to the target** | Staging and renaming are pure overhead on the fast path |
+| **Large files go through overlapped double buffering** | |
 | **Block cloning when possible** | Server-side copy on the same volume, never entering user mode |
 | **Hard links preserved** | Otherwise a set of links becomes independent copies: the contents are right, the space multiplies, and later edits stop propagating |
-| **`--verify` off by default** | It costs 54%, and most copies are not worth that |
-| **`--ads` off by default** | Detecting streams costs 19 µs per file, and most files have none |
+| **`UseUnbufferedIo` has been deleted** | It defaulted to `true` and nothing read it. Unbuffered I/O requires the offset, the length and the buffer address to be sector-aligned, and **measurement showed large-file copies already at 1034 MB/s against a volume that sustains 967 MB/s — already at the device's limit** — so bypassing a cache that never waits cannot help |
+| **The checkpoint interval stays at 32 MB** | Raising it to 256 MB **produced measurements that contradicted each other** (32 MB: 1.02 s, 256 MB: 1.18 s, 1 GB: 4.11 s, and `--no-resume` came out slower than leaving it on), because cache eviction dominated a sequential measurement. Reverted |
 
 ## Recycling
 
 | Decision | Reason |
 |---|---|
-| **One bin per volume** | A move within a volume is a rename; across volumes it would be a copy |
+| **One bin per volume**, `<volume>:\Roboc_bin\` | A move within a volume is a rename; across volumes it would be a copy. It also keeps clear of the system Recycle Bin |
+| **A flat layout**: `<bin>\<leaf name>` beside a `.txt` sidecar of the same name | |
+| **The original path has three fallbacks**: sidecar, then marker, then mirrored arithmetic | |
 | **Marker files are not translated** | They are identifiers, not interface text — see the note in `RecycleBin` |
 | **The original-path line is read in both languages** | The marker is written in whichever language was in force and read back later, possibly after the user has switched |
 
@@ -254,29 +269,64 @@ other six" problem in one edit.
 
 | Decision | Reason |
 |---|---|
+| **Accepting an argument and doing nothing with it is worse than refusing it** | Refusing costs a second. **A false assurance can cost the data it was supposed to protect** |
+| **`--verify` is implemented**, off by default | It costs 54%, and most copies are not worth that. Windows' own copy does **no verification at all** (`CopyFileEx` has no such option), which is what makes this a capability rather than a duplicate |
+| **`--ads` is implemented**, off by default | Probing for streams costs **one `FindFirstStreamW` per file** — 19 µs measured, against 16 µs for reading a timestamp — about **3.8-7.4%** of throughput |
 | **Settings live beside the executable** | So "delete the folder" is literally true |
 | **Both directions exist for every switch** | A feature enabled in settings must be switchable off for one run |
 | **The language is a string, not a boolean** | A third language is a new value rather than a new field |
-| **Rejecting beats accepting-and-ignoring** | See section 13 |
 
 ---
 
 # 5. Defects that have been fixed
 
-**These are grouped by the shape of the mistake, because the shape is what recurs.**
+**These are grouped by the shape of the mistake, because the shape is what recurs.** Note that
+most of them belong to the same family.
 
 ## A. "The code is right but the screen is blank" (4)
 
 Rendering that fails silently, leaving something invisible rather than wrong.
 
+| Defect | Symptom |
+|---|---|
+| The gridlines were drawn before the fill, and the opaque fill covered them | Something that should have been visible was not |
+| `DT_CALCRECT` was used to draw instead of to measure | A button with no text |
+| No `WS_CLIPCHILDREN`, so the parent repainted over its child buttons every frame | A handle with no button |
+| `Marshal.PtrToStructure<T>` used on a class | The exception crossed a P/Invoke callback boundary and **the process exited silently, with exit code 0** |
+
+**Only a screenshot finds this family.** Reading the code does not.
+
 ## B. "The promise does not match the implementation" (7)
 
-Eight, counting the one found while writing this: accepted arguments that were never
-implemented, and claims in output that were not true of the code that printed them.
+**Accepted arguments that were never implemented, and claims in the output that were not true
+of the code that printed them.**
+
+| Claim | Reality |
+|---|---|
+| `CopyAlternateDataStreams = true` | Nothing reads it |
+| `VerifyChecksum` | Nothing reads it |
+| `--verify` | Accepted the argument and did nothing |
+| `UseUnbufferedIo = true` | Nothing reads it (since deleted) |
+| `--no-flush` | Cannot reach the checkpoint flush |
+| `--checkpoint-interval` | Not registered in `TakesValue` |
+| **`--export-reg`** | **Not registered in `TakesValue`, and still is not** |
+
+**The first six were found by reading the code by eye; the seventh was found by
+`scripts/check-wiring.ps1`.**
 
 ## C. "The failure never reached anyone who needed it" (4)
 
 Errors caught and discarded, or written somewhere nobody looks.
+
+| Where | Symptom |
+|---|---|
+| `Walk` enumerated a file as if it were a directory | Something that should have been counted was not |
+| `OnItemWritten` only fired for files | Something that should have been selected was not |
+| `Invoke-Timed` discarded stderr | Something that should have reported a failure said "finished in 0.2 seconds" |
+| The `$Corpora` parameter shadowed the `$corpora` array | Something that should have run the test said "the corpus does not exist" |
+
+**The cause of the fourth**: PowerShell variable names are case-insensitive, so the parameter
+declaration erased the corpus definition and every `$c.Key` was `null`.
 
 ## D. A single severe defect
 
@@ -295,7 +345,7 @@ filesystem refusing, and actually means "there is no such control code".
 **This defect had been present since the project began, and had been written off as "this
 machine does not support it".**
 
-## E. "Only half of it was changed" (3)
+## E. "Only half of it was changed" (4)
 
 **When one problem has several paths or several layers, fixing one of them feels like fixing
 it.**
@@ -305,6 +355,7 @@ it.**
 | **The Mica material** | The window background's Mica was removed | **The title bar is drawn by DWM and kept its Mica** — so the bar followed the wallpaper while the body stayed neutral grey |
 | **Menu icons** | `WriteFlat` called `IconFor` correctly | **`WriteCascade` — the default layout — hard-coded `quotedExe + ",0"`**, so six entries showed one icon |
 | **Settings persistence** | Both `Load()` and `Save()` were written | **`Save` still used the reflection overload**, which must throw in a trimmed build |
+| **The "reveal" after a paste** | `SHOpenFolderAndSelectItems` called on its own did reuse the window | **Called by the program, it does not** — an already-open destination still gets a new window beside it. The criterion used was "the API works on its own", not "what the user sees" (section 17) |
 
 **The Mica case is the clearest.** The comment written when Mica was first removed says:
 
@@ -330,6 +381,59 @@ change covered everything.**
 **They were found together, during one pass to clear warnings** — until then the build had
 said "3 warnings" and nobody had read it.
 
+**`scripts/check-wiring.ps1` later turned this class into an automated check**, but its scope
+is configuration and arguments, not compiler warnings. **The rule is that the build must be
+silent, not that the warning count has not changed** (section 7, rule 8).
+
+## H. "The method exists and nobody ever called it" (1)
+
+**`RecycleBin.WriteMarker` had been there since the first commit and was never called once in
+the project's whole life.**
+
+**The consequence**: when a **directory** was recycled, the directory was moved and the index
+recorded it, **but the marker file that lets the bin recognise it was never written**. `Walk`
+therefore treated it as an ordinary container and recursed into it, looking each file inside up
+in the index — **and finding none of them**.
+
+**What the user saw: a "recycled successfully" message, and then a bin that said it was empty
+— with a complete folder sitting inside it, 1015 MB, every file present.**
+
+**Why it was hard to find**:
+
+| Layer | State |
+|---|---|
+| The recycle operation | Reported success |
+| The file system | The directory really was in the bin |
+| The index | The record was complete |
+| **The listing** | **Said there was nothing** |
+
+**No layer reported an error.** The only symptom the user could see was "the bin is empty",
+**and that is also a legitimate message describing a normal state.**
+
+**The root cause was not only a missing call**; there was a design inconsistency as well:
+
+- `OriginalPathOf` says plainly that **the index is the authoritative source** and the marker
+  is only a fallback for old data
+- `Walk`, deciding what a directory was, **consulted only the marker and never the index**
+
+**Two methods disagreed about what was authoritative, each was self-consistent, and together
+they were wrong.**
+
+**The fix, and the defences**:
+
+1. `Walk` now **asks `OriginalPathOf` first** for a directory (which consults the index), and
+   only recurses when that fails
+2. `TryPut` now calls `WriteMarker` — **not only a fallback for the program but a note for the
+   person**: the marker records the original location, the time of recycling and how to
+   restore it
+3. **A twenty-fourth self-test item**: recycle a directory, then assert that it **can be
+   listed**, and that it **carries a marker**
+
+**One gap is still open**: `scripts/check-wiring.ps1` can find properties and arguments that
+are **declared and never read**, but **it cannot find a private method that is defined and
+never called**. Only a compiler analyser (`IDE0051`) can, and that does not run at build time
+by default.
+
 ## G. "The comment says the opposite of the code" (1)
 
 ```csharp
@@ -352,6 +456,8 @@ family of defects.**
 
 # 6. Post-mortem: `delete D:` removed an entire working tree
 
+**This is the most serious accident in the project's history.**
+
 ## What happened
 
 An early version ran `delete D:` — without the backslash. Windows reads that as *the current
@@ -359,41 +465,75 @@ directory on drive D*, which was the project root. It was deleted.
 
 ## Root cause
 
-**The input was ambiguous and the program resolved the ambiguity silently.** `D:` is a legal
-path, so nothing in the argument parser had any reason to object.
+**A drive-relative path is a semantic trap in Windows**: `D:` is not `D:\`, it is "the current
+directory on drive D". **The input was ambiguous and the program resolved the ambiguity
+silently** — it took a legal but semantically unexpected input literally, and nothing in the
+argument parser had any reason to object.
 
 ## The three guards now in place
 
 | Guard | Catches |
 |---|---|
-| Drive-relative paths | `D:` and anything shaped like it |
-| Volume roots | An entire volume |
-| The program's own folder | Its folder and every ancestor |
+| `GuardDriveRelative` | `D:` and anything shaped like it |
+| `GuardAgainstVolumeRoot` | An entire volume |
+| `GuardAgainstSelf` | The program's own folder and every ancestor |
 
 **Any one of them refuses the command outright** rather than asking for confirmation.
+
+**On top of that**, deleting requires `--yes` and one forced confirmation.
 
 ## The principle that came out of it
 
 **A destructive operation must never run on uncertain input.** Not "must warn first" — must
-decline. A prompt can be dismissed by reflex; a refusal cannot.
+decline. Better to refuse and ask the user to be more specific than to guess. A prompt can be
+dismissed by reflex; a refusal cannot.
+
+**This principle later saved the recycle bin** — refusing a second item with the same name, and
+refusing to recycle something that is already in the bin, are both extensions of it.
 
 ---
 
 # 7. Maintenance rules
 
+**This section is a set of hard conventions. Breaking one does not fail the build.**
+
 ## Rule 1: an empty `catch` is allowed only for enumeration, cleanup, or a read with a fallback
 
-Every empty catch must be one of those three. Anything else is a swallowed failure. There are
-roughly 78 such sites, each reviewed against that list.
+```csharp
+catch (IOException) { }
+catch (UnauthorizedAccessException) { }
+```
+
+**Every empty catch must be one of those three. Anything else is a swallowed failure.**
+
+**How to decide**:
+
+| Allowed | Not allowed |
+|---|---|
+| Skipping an unreadable item during enumeration | A failed move, delete or write being swallowed |
+| A cleanup whose failure is harmless (a leftover file stays behind) | A failure with consequences for data integrity |
+| A read that has a fallback below it (sidecar, marker, arithmetic) | The only channel that records something |
+
+**There are 78 such sites at present, each one reviewed, and all of them in the allowed
+categories.** But **a new one must be classified before it is written** — copy that catch onto
+a delete path and it compiles, passes its tests, and silently loses data.
 
 ## Rule 2: a new argument with a value must be registered in `Args.TakesValue`
 
 Otherwise the parser treats the value as a positional path. `--checkpoint-interval` was
-missing from it once, and the failure was `roboc: source not found: 32`.
+missing from it once, and the failure was `roboc: source not found: 32` — **naming neither the
+argument nor the omission.**
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\check-wiring.ps1 -Root .
+```
+
+**Exit code 0 means it passed. Worth running before every release.**
 
 ## Rule 3: a new `CopyOptions` property must have a reader
 
-Declared and never read means an argument that is accepted and ignored — see section 13.
+The same checker covers it. **A property that is only ever assigned makes a reader believe some
+behaviour is implemented** — see section 4.
 
 ## Rule 4: `.ps1` must carry a UTF-8 BOM
 
@@ -432,7 +572,11 @@ with the reason written beside it** — not left in the log.
 
 ## Rule 9: verify after the change, do not assume
 
-**One problem usually has several paths or several layers.** See section 5E.
+**One problem usually has several paths or several layers.** Fixing one is not fixing all of
+them: the window background's Mica was removed while **DWM kept painting the title bar with
+it**; the flat layout's icons were fixed while **the cascade layout that ships by default is a
+different piece of code**; the settings reader was written while **the save still used an
+overload that trimming disables**. See section 5E.
 
 The concrete form: changed the default layout, test the default layout; changed part of a
 window, look at the whole window; changed both ends of a setting, test both ends.
@@ -446,39 +590,77 @@ because it had not run at all.**
 
 # 8. Visual specification
 
+**The single reference for every interface element. Each number is declared once, here, and
+must not appear a second time in the code.**
+
 ## The underlying principle
 
 **Everything is declared in points and logical pixels, and scaled by DPI at draw time.** Fixed
 pixel values do not survive a change of scale factor.
 
+```csharp
+// font: points -> pixels
+int height = -(int)Math.Round(points * dpi / 72.0);
+
+// layout: declared in logical pixels at 96 DPI
+private static int Scaled(int pixels, int dpi) => pixels * dpi / 96;
+```
+
+**`GetDpiForSystem()` must be used before the window exists**, and `AdjustWindowRectExForDpi`
+must account for the border and the title bar.
+
 ## Vertical rhythm (96 DPI logical pixels)
 
 ```
-20   headline
-46   percentage
-86   current item
-108  bar (8 px tall)
-134  graph (92 px, fixed)
-250 / 276 / 302   detail lines
-320  client height
+ 20  headline (10 pt)                   20 .. 33
+ 46  percentage (19 pt)                 46 .. 71
+ 86  current file name (9 pt)           86 .. 98
+108  bar (8 px)                        108 .. 116
+134  rate graph (92 px, fixed)         134 .. 226
+250  three detail lines (26 px apart)  250 .. 306
+-----------------------------------------------
+client height 320, window 510 × 352
 ```
+
+**Two iron rules**:
+
+1. **The graph's height is fixed; it is never "the remaining space"** — an elastic height
+   absorbs the rounding differences between the text bands
+2. **Changing any one band means recomputing the whole rhythm** — a card was once shrunk
+   without re-spacing, and a file name grew into the progress bar
 
 ## Font hierarchy
 
-| Element | Size |
-|---|---|
-| Progress headline | 10 pt |
-| Dialog body | 10 pt |
-| All buttons | 10 pt |
-| Progress detail lines | **9 pt (the only exception)** |
-| Percentage | 19 pt |
+| Element | Size | At 175% |
+|---|---|---|
+| Progress headline | **10 pt** | 23 px — **the baseline** |
+| Dialog body, dialog buttons, progress buttons | **10 pt** | 23 px |
+| Progress percentage | 19 pt | 44 px |
+| **Progress detail lines** | **9 pt** | 21 px — **the only exception** (a secondary reading) |
 
-`CreateFontW` takes a **negative pixel height** derived from points: `height = -(points * dpi / 72)`.
+`CreateFontW` takes a **negative pixel height** derived from points:
+`height = -(points * dpi / 72)`.
 
 ## Colours
 
 The palette is read from the system theme and accent colour at startup. Dark and light are
 separate palettes, not one palette with an inversion applied.
+
+| Purpose | Source |
+|---|---|
+| Light and dark theme | `HKCU\...\Themes\Personalize\AppsUseLightTheme` |
+| Accent colour | `HKCU\Software\Microsoft\Windows\DWM\AccentColor` (**ABGR**, needs `& 0x00FFFFFF`) |
+
+## The gridline tuning record
+
+| Version | Horizontal | Vertical | `GraphGrid` |
+|---|---|---|---|
+| v1 | 3 | — | `Lighten(rgb, 0.42)` — covered by the fill, invisible |
+| v2 | 3 | — | `0.42` — visible once the order was fixed, too strong a contrast |
+| **v3** | **3** | **9** | **`0.52`** — current |
+
+**For reference**: the graph fill is `Lighten(rgb, 0.72)`. **A larger number is lighter**, so a
+contrast that is too strong is reduced by moving up. **Later adjustments in steps of 0.05.**
 
 ## Window appearance
 
@@ -487,7 +669,27 @@ separate palettes, not one palette with an inversion applied.
 - **Caption colour**: `DWMWA_CAPTION_COLOR` (35), one step darker than the card
 - **No Mica**
 
+```csharp
+private const uint WS_CLIPCHILDREN = 0x02000000;   // not optional
+private const uint WindowStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_CLIPCHILDREN;
+
+DwmSetWindowAttribute(hwnd, 33, ref round, sizeof(int));          // rounded corners
+
+// the title bar is drawn by DWM, so this must be set before the window is shown
+if (DwmSetWindowAttribute(hwnd, 20, ref dark, sizeof(int)) != 0)
+    DwmSetWindowAttribute(hwnd, 19, ref dark, sizeof(int));       // the old Windows 10 number
+```
+
+**Without `WS_CLIPCHILDREN` the parent's painting does not avoid its children** — and the
+progress window repaints its whole client area ten times a second, so **a button is created,
+positioned correctly, and then painted over on every frame.**
+
 ## The rate graph
+
+**Two stages of smoothing**: a moving average (window 3) to remove instantaneous spikes, then
+a Catmull-Rom spline converted to cubic Bezier curves to remove the corners.
+
+**120 samples at 100 ms each — twelve seconds of history.**
 
 Histogram samples in a ring buffer, not instantaneous values — instantaneous rates jitter too
 much to draw as a line.
@@ -498,29 +700,78 @@ Tuning record: three horizontal and nine vertical gridlines; gridlines at
 **Gridlines must be drawn after the opaque fill.** Drawn before, they are invisible — which is
 exactly what happened.
 
+**The fill and the stroke must share one path**:
+
+```csharp
+BeginPath(dc);
+MoveToEx(dc, points[0].X, points[0].Y, 0);
+PolyBezierTo(dc, curves, curves.Length);
+LineTo(dc, x + width, y + height);
+LineTo(dc, x, y + height);
+EndPath(dc);
+StrokeAndFillPath(dc);      // the brush fills and the pen strokes
+```
+
+**The window size must be settled before the layout**: `_dpi = ScaleFor(_window)` comes before
+`Layout()`.
+
 ## GDI discipline
 
-**Every brush, pen and region is deleted.** A process has a finite number of GDI objects, and
-leaking three per repaint at five repaints a second exhausts the quota within minutes — after
-which every drawing call fails silently and the card goes blank rather than wrong, which is far
-harder to diagnose.
+**Every brush, pen, region and bitmap must be `DeleteObject`d.** A process has a finite number
+of GDI objects, and leaking three per repaint at five repaints a second exhausts the quota
+within minutes — after which every drawing call fails silently and the card goes blank rather
+than wrong, which is far harder to diagnose.
 
 **Rounded shapes go through `RoundedBox`**, which converts the HDC to a `Graphics`, draws, and
 disposes before returning. A `Graphics` holds drawing state on the device context while it is
 alive and the surrounding GDI calls know nothing about it, so the two APIs are never in use at
 the same moment.
 
+**Font objects are cached per instance and never released**: acceptable, because the process
+reclaims them at exit, **but if one process ever displayed several dialogs at once this would
+become a real leak.**
+
 ---
 
 # 9. Dialog inventory
 
-**Confirmation** — restore, stop an operation, delete permanently, paste over existing names,
-remove the program.
+**Fourteen dialogs, all self-drawn.** Shared properties: body and buttons at 10 pt, DWM
+rounded corners, a themed title bar, centred text, a warning sign on error dialogs and a
+recycle mark on the bin dialogs.
 
-**Report** — ready, recycle finished, restore finished, permanent deletion failed, integrity
-warning.
+## Confirmation
 
-**Error** — no selection received, clipboard write failed, registration failed.
+| # | Dialog | Trigger | Buttons |
+|---|---|---|---|
+| 1 | Restore confirmation | Right-click → recycle, with the selection inside the bin | Yes / No |
+| 2 | Paste conflict | Pasting into a folder with a name clash **that is a real conflict** | Yes / No / Cancel |
+| 3 | Permanent delete confirmation | Right-click → delete | Yes / No |
+| 4 | Empty-the-bin confirmation | `reclaim --empty` (**unreachable from the menu**) | Yes / No |
+| 5 | Stop confirmation | Cancelling or closing the progress window | Yes / No |
+
+**Number 4 is dead code** — the menu command is `reclaim --gui-errors`, which does not contain
+`--empty`, so that branch is never entered.
+
+**One confirmation sits outside this list**: removing the program, `Roboc — Confirm removal`
+(`UninstallCommand.cs`).
+
+## Report
+
+| # | Dialog | Trigger |
+|---|---|---|
+| 6 | The bin is empty | The bin was clicked and holds no user files |
+| 7 | Recycle result | **Something failed** after recycling (a clean run shows nothing) |
+| 8 | Restore failed | Something failed after restoring |
+| 9 | Copy/paste failed | Something failed after the operation (a clean run shows nothing) |
+| 10 | Permanent delete failed | The delete engine wrote anything at all to stderr |
+
+**One report sits outside this list**: `Roboc is ready`, shown once the context menu has been
+registered (`Program.cs`).
+
+## Error
+
+No selection received (two versions), clipboard write failed, clipboard is empty. A failed
+context-menu registration is reported the same way, from `Program.cs`.
 
 ## Layout: keeping columns aligned under centring
 
@@ -528,22 +779,62 @@ Dialog bodies are centred as a block **while each line inside it is left-aligned
 every line individually would put the labels of a two-column table at different indents and
 destroy the alignment that makes the numbers readable.
 
+**Under per-line centring (`DT_CENTER`) every line has a different width, so every line has a
+different left edge, and columns cannot align at all.** The answer is to **make every line's
+total width identical**:
+
+```csharp
+// display width: a CJK or full-width character is 2, ASCII is 1
+private static int DisplayWidth(string text);
+
+// the label is padded to 12 units and the value right-aligned within 10 = a constant 22
+private static string StatRow(string label, string value);
+```
+
+**Computed at run time, not written as literal spaces** — values grow (`4 items` becomes
+`10000 items`), and literal spaces are misaligned the first time a four-digit number appears.
+
 ---
 
 # 10. Performance data and measurement discipline
 
 ## Measurement discipline: this machine's storage is degraded by its own load
 
-**Sustained small-file churn degrades the volume, and only a reboot restores it.** Healthy is
-around 3900 files per second; one session measured 2953 falling to 1335.
+**Sustained small-file churn degrades the volume, and only a reboot restores it.**
 
-**Consequences:**
+The record — **the same moment, the same operation, only the volume differing**:
 
-- Only `scripts/run-perf.ps1` is used for comparisons. Ad-hoc measurement is not comparable.
-- A run whose drift exceeds 20% is **excluded** and the number of usable rounds is reported.
-- The full comparison across corpora needs **separate sessions with a reboot between them.**
+| | D: (Disk 0) | E: (Disk 1) |
+|---|---|---|
+| 300 × 4 KB file creations | 504 files/s | 1999 files/s |
+| 16 MB sequential write + fsync | **1 MB/s** | 289 MB/s |
+
+**A difference of two thousand times.**
+
+**Therefore:**
+
+1. **Only `scripts/run-perf.ps1` is used for comparisons.** Ad-hoc measurement is not
+   comparable.
+2. **Interleave the runs, rotate the order, and measure the volume's health before and after
+   every round.**
+3. **A round whose drift exceeds 20% is discarded whole**, and the number of usable rounds is
+   reported — annotating it without excluding it still lets contaminated data into the median.
+4. **Rebooting before each measurement session is recommended.**
+
+**Health reference: about 3900 files per second.** One session measured 2953 falling to 1335.
+
+**The full comparison across corpora needs a separate session for each corpus, with a reboot
+between them.**
 
 ## Results
+
+| Goal | Conclusion | Evidence |
+|---|---|---|
+| **Copy level with robocopy, or slightly ahead** | **Level at its best, and markedly more consistent** | Roboc's spread across rounds is 7%; Robocopy `/MT:32` is 114% |
+| **Delete better than PowerShell `rm`** | **Yes — two to three times faster on a healthy volume** | Three rounds agreed, and it never lost |
+| The large-file gap | **It does not exist** | See below |
+
+**The measurements behind those conclusions:**
 
 | Measurement | Result |
 |---|---|
@@ -561,23 +852,81 @@ around 3900 files per second; one session measured 2953 falling to 1335.
 **Conclusion: level with robocopy at its best on many small files, and far more consistent;
 two to three times faster than PowerShell at deleting.**
 
+### The large files' "3.8x gap" is a measurement artefact
+
+| Measurement | Value | Nature |
+|---|---|---|
+| The volume's true sustained write (`Flush(true)`) | **967 MB/s** | the physical limit |
+| Pure write with no flush (.NET) | 4109 MB/s | absorbed by the cache |
+| **Robocopy `/MT:32`** | **11,100 MB/s** | **a cache number; the data had not reached the disk** |
+| **Roboc** | **831–1034 MB/s** | **really on disk = 86–107% of the limit** |
+
+**Robocopy reports 11.1 GB/s, eleven times what the volume can physically do.**
+
+**The mechanism**: `OverlappedPipeline.cs:198` flushes at every resume checkpoint — **which log
+correctness requires** (the log must not claim bytes that a power cut could lose).
+
+**`--no-flush` does not reach it** (it only turns off the flush at the end of the file). **This
+is written into the code comment.**
+
+**A controlled measurement proves the checkpoint interval is not a lever**:
+
+```
+32MB / 128MB / 512MB / no-resume  ->  median 0.93-0.99 s, ranges completely overlapping
+```
+
+**Large-file copying is bound by the disk. That is the end of it.**
+
 ## Measurement method is easier to get wrong than the conclusion
 
 **Recorded because it happened repeatedly:**
 
+- **The same 1 GB interval variant measured 4.11 s uncontrolled and 0.99 s controlled**, with
+  the source warmed into cache before every run. A parameter's effect measured sequentially is
+  dominated by **cache eviction**, and produced results that contradicted each other.
+  **The later number describes the state of the cache, not the parameter under test.**
 - Timings were taken without discarding stderr, so a failed generation was reported as
   "generated in 0.2 seconds".
-- A parameter's effect was measured sequentially, where **cache eviction dominated** and
-  produced results that contradicted each other. Warming the source into cache before each run
-  made the effect vanish entirely.
 - A PowerShell parameter named `$Corpora` silently overwrote a `$corpora` array, because
   **PowerShell variable names are case-insensitive**.
 
 ---
 
-# 11. Permissions
+# 11. Performance test plan
 
-## Apache-2.0 (decided)
+`scripts/run-perf.ps1`. The corpora and the contestants:
+
+| Corpus | Shape |
+|---|---|
+| A | Many small files: 20,000 × 4 KB |
+| B | A few large files: 2 × 1 GB |
+| C | Mixed |
+| D | Metadata-heavy (hard links + ADS) |
+
+Contestants: `Roboc`, `Roboc bare` (`--no-resume --no-flush`), `Robocopy` (default, `/MT:32`,
+`/MT:1`) and `xcopy`.
+
+**`Roboc bare` exists to separate the cost of the features from the cost of the
+implementation.**
+
+Deletion: `Roboc delete`, `PS Remove-Item` and `cmd rd`, **each one rebuilding the same starting
+point.**
+
+---
+
+# 12. Known gaps
+
+| Gap | Status |
+|---|---|
+| **ADS copying** | `--ads` is implemented, off by default |
+| **`--verify`** | Implemented (byte-for-byte comparison), off by default |
+| **Hard-link reconstruction** | Implemented, on by default; the mapping is capped at one million entries |
+| **Reparse points** | Implemented and verified |
+| **Dialog 4 is unreachable** | Undecided: delete it, add a menu entry, or keep it |
+| A comment stating the empty-catch convention | **Not done** — the rule is in section 7 |
+| `Rounds=2` in Quick mode is not statistically meaningful | Known; full mode uses 5 |
+
+## Licence: Apache-2.0 (decided)
 
 **Copyright holder: Neus117.** See `LICENSE` and `NOTICE`.
 
@@ -596,15 +945,418 @@ GPL-3.0, never the reverse. **A licence already granted cannot be withdrawn.**
 
 ## Next priorities
 
-- English documentation for both guides (in progress)
-- Screenshots in the README
-- The `YesNo` default-button question: dialogs currently default to "Yes". **If a report ever
-  arrives of a destructive action taken by reflex, this is the first place to look.**
+### Exposed by this round of firefighting, and still open
+
+| Priority | Item | Why |
+|---|---|---|
+| **P1** | **Add a check for "a private method nobody calls"** | A whole-project scan this round turned up two (`MeasureOne` and `mergedIntoRestore`), and `scripts/check-wiring.ps1` **cannot find that class at all**. `WriteMarker` hid for a long time in the same shape. The compiler has `IDE0051`, but it does not run at build time by default |
+| ~~**P1**~~ **Paid off** | ~~Sync the English developer guide~~ | **Completed 2026-10-14, evening**: English 610 → 1361 lines, 17 sections matching the Chinese section for section, 90 headings with an identical level signature. **One line worth keeping about how the debt arose**: the Chinese gained four sections while writing this firefighting record and the English did not follow — and *a document out of sync is worse than no document* (文档不同步比没有文档更糟), because the reader cannot tell which one is complete. **Syncing is maintenance, not a one-off task**: every section the Chinese gains, the English has to follow |
+| **P2** | `TryCollectFromMenu`'s coverage of explicit paths | `--gui-errors` lets the shell's answer overwrite a path passed on the command line. **The menu path is correct**, but anyone who later wants `--gui-errors` from the command line will be caught by it. **Not changing it now** — that logic exists for "a large selection sends only one path", and touching it is riskier than leaving it |
+| **P3** | If a stray marker appears in the bin's root again | This round fixed `Walk`'s `atRoot` test, **so a marker in the root is now correctly treated as an ordinary file item**. But the files left over from before are still on users' machines and have to be handled by hand |
+
+### Carried over from the previous round
+
+| Priority | Item | Note |
+|---|---|---|
+| P3 | What to do about dialog 4 | |
+| P3 | A full performance run with a separate session per corpus | Clean numbers for B, C and D are needed. **The corpora have moved to `D:\bench\roboc-perf`** |
+| P3 | A comment for each of the 78 empty catches | Low value; the rule already covers them |
+| P3 | Screenshots in the README | |
+| P3 | The `YesNo` default-button question | Dialogs currently default to "Yes". **If a report ever arrives of a destructive action taken by reflex, this is the first place to look** |
+
+### Publishing and distribution (untouched)
+
+| Priority | Item |
+|---|---|
+| **P1** | A winget manifest — the audience fits, and it does not force signing |
+| **P1** | README support the author + `.github/FUNDING.yml` |
+| P2 | An installer (Inno Setup) |
+| P3 | A code-signing policy section in the README |
+
+**Day-to-day to-dos, channel evaluations, the donation plan and promotional copy all live outside
+the repository, in `D:\Coding\DeepSeek 开发经验\运营\`.** That material is commercial and
+promotional in nature and does not go into a public repository.
+
+**This path was "improved" once, wrongly, and the episode is worth recording.** On 2026-10-14 I
+moved those two documents into the repository at `docs/运营/`, on the grounds that keeping them
+outside gave them no version history and that they would be deleted along with the workspace.
+**The reasoning was sound but it did not override the original constraint** — that material does
+not belong in a public repository. The commit in question had not been pushed, **so it could still
+be withdrawn cleanly**; had it been pushed, the only remedy would have been rewriting published
+history.
+
+**Do not compromise with an ignored directory inside the repository either.** `git status` would
+then be permanently dirty, and a single `git add -A` would sweep it in. **Hiding is not excluding;
+only keeping it outside the repository actually excludes it.** `.gitignore` carries an entry for
+the same name as a backstop, so that nobody — including me — recreates that directory here.
 
 ---
 
-# 12. One working principle
+# 13. One working principle
 
-**Accepting an argument and doing nothing with it is worse than refusing it.**
+**Make the problem observable before changing the code.**
 
-Refusing costs a second. **A false assurance can cost the data it was supposed to protect.**
+This project has had four "the failure never arrived" defects and seven "the promise does not
+match the implementation" defects, and **not one of them was found by reading the code** — they
+were found by screenshots, by diagnostic logging, and by a tool written specifically to hunt
+that class of problem.
+
+**What is on the screen, what is in the log, and what the tool prints are the only things that
+get through this kind of defect.**
+
+---
+
+# 14. Test hygiene
+
+**Test artefacts go in `artifacts\scratch\`, never in the root of a drive.**
+
+## Why this has a section of its own
+
+On 2026-10-14 the user found more than a dozen test directories in the root of `D:\`. The test
+cases had created every one of them — `D:\roboc-restore-test`, `D:\roboc-marker-test`,
+`D:\roboc-open-verify` and the like — **harmless one at a time, and together a heap of rubbish
+growing in someone else's drive root.**
+
+**The user's words: 「你这样很不规范。」** ("This is very unprofessional.") That is correct.
+
+## Two rules
+
+**1. Build in a fixed place**
+
+```
+artifacts\scratch\        <- every temporary directory and file
+%TEMP%\                   <- only when artifacts is not writable
+```
+
+**Never** `D:\<something>-test`. The drive root belongs to the user, not to the build system.
+
+**2. Cleanup must scan and confirm; memory is not enough**
+
+This is the rule that was actually broken. Cleanup ran twice that day, reported "deleted" both
+times, and missed something both times — **because the directories were listed from memory
+rather than found by scanning the disk.**
+
+```powershell
+# wrong: list them from memory
+Remove-Item 'D:\roboc-recycle-test' -Recurse -Force
+
+# right: scan, then confirm one by one
+Get-ChildItem 'D:\' -Force | Where-Object { $_.Name -like 'roboc-*' } |
+    ForEach-Object { "  $($_.FullName)  $($_.LastWriteTime)" }
+# look at the list, confirm every entry is yours, then delete
+```
+
+**Memory misses things. A scan does not.**
+
+## Deciding whether something is yours
+
+**Never delete anything whose origin you cannot explain.** The scan that day produced three
+kinds:
+
+| Item | Verdict |
+|---|---|
+| `roboc-*-test`, `%TEMP%\roboc-trim*` | **Mine, delete** |
+| `Roboc-backup-20261013-115159` | **A deliberate safety net**, with a verification record. **Keep it, and ask the user** |
+| `roboc-perf` (a 4.2 GB corpus) | **Mine, but expensive to rebuild** (the volume degrades, and only a reboot restores it). **Move it, do not delete it** |
+
+**The last one became a move to `D:\bench\roboc-perf`** — the drive root was clean, the corpus
+survived, and the cost was zero.
+
+## An earlier lesson of the same kind
+
+The same day: after a code change, `restore --gui-errors` was run directly to test the automatic
+open. It passed, and "fixed" was reported.
+
+**But the menu never takes that path.** The menu calls `recycle --gui-errors`, which calls
+`restore --quiet` internally — `fromMenu` is false, and that code never runs.
+
+**A test must go through the real entry point, not the most convenient one.** This is the same
+fault as "cleanup must scan, not remember": **using what you assume instead of what is there.**
+
+---
+
+# 15. Firefighting record: six layers of one recycle-bin defect
+
+**2026-10-14. The user reported 「坏了坏了重大bug」 ("something is badly broken"). Six rounds
+followed; every round believed it was fixed, and every round had a next layer.**
+
+This section is not a log of events. It is here because **five of the six layers are the same
+fault.**
+
+## The six layers
+
+| Layer | Symptom | Root cause | How it was found |
+|---|---|---|---|
+| 1 | After recycling, the bin said it was empty | `WriteMarker` had never been called since the first commit | **Reading the code** |
+| 2 | Restoring did not open the original location | The internal call went through `--quiet`, so `fromMenu` was false | **Reading the code** (wrong) |
+| 3 | The same | The `explorer.exe` spawn was taken over by the shell and dropped | **Reading the code plus one unrelated test** (still wrong) |
+| 4 | The same | **The restore cleared the index, so looking the original path up afterwards had to fail** | **A diagnostic log** |
+| 5 | A conflict silently kept a copy, and the user was not told | `--called-internally` suppressed the menu path as well | **A diagnostic log** |
+| 6 | `Roboc.回收信息.txt` appeared in the bin's root | **A marker file was recycled as an ordinary file, so `Walk` treated the entire bin as one item** | **A full lifecycle log** |
+
+## Five of the layers are the same fault
+
+**For layers 2 to 6, the first two rounds ended in a conclusion drawn from reading the code, and
+both were wrong. Layers 4, 5 and 6 were each located in one pass once logs were used.**
+
+**This is exactly what rule 7 says ("make the problem observable first"), and it was violated
+three times.**
+
+**How, specifically:**
+
+- Layer 2: **`restore --gui-errors` was run directly**, it passed, and "fixed" was reported.
+  **The menu never takes that path.**
+- Layer 3: after switching to `ShellExecute`, the window count went from five to six and
+  "fixed" was reported. **That test proved the API works, not that Roboc calls it.**
+- Before layer 6: three explanations of "why the marker is in the root", all three of them
+  guesses.
+
+**The lesson, in one sentence:**
+
+> **Before reporting "fixed", one run has to go the way the user actually goes.**
+> **A proxy metric — a live process, a changed window count, an API that works on its own — is
+> not verification.**
+
+## One finding that deserves its own place
+
+**The root cause of layer 6 had a hidden severity:**
+
+```
+one stray file -> HasMarker is true for Walk(binRoot)
+               -> "the whole bin" is treated as one recycled directory
+               -> the user clicks restore, and the whole bin is moved away
+```
+
+**The text shown in the list was identical before and after the fix**
+(`236 B  D:\Temp\0\Roboc.回收信息.txt`) — **only what the item actually was differed.** This
+kind of defect reports nothing at all.
+
+**The fix**: `Walk` gained an `atRoot` test — **the bin's root is a container, and is never one
+of its own contents.**
+
+## The layer-1 leftover found along the way
+
+**The same firefight found that `WriteMarker` existed and had never been called** — and
+`scripts/check-wiring.ps1` can find "a property or argument that is declared and never read",
+**but not "a private method that is defined and never called".**
+
+**The whole-project scan at the end of that round turned up two more of the same kind:
+`MeasureOne` (never called) and `mergedIntoRestore` (assigned, never read).**
+
+**That gap in the checks is still open.** The compiler has `IDE0051`, but it does not run at
+build time by default. **It deserves a round of its own.**
+
+---
+
+# 16. The method this firefight left behind
+
+**What is reusable from those six rounds, ordered by how much it can be trusted.**
+
+## One: diagnostic logs beat reading the code
+
+**Layers 4, 5 and 6 were each located in one pass with a log; layers 2 and 3 were two wrong
+guesses from reading the code.**
+
+**A log must record what was decided, not what happened.** The line from layer 4 was:
+
+```
+originals=[(original location unknown)]
+```
+
+**It states the wrong answer outright.** If it had said only "restore started" and "restore
+finished", nothing would have been visible.
+
+**The practice**: at a branch, record **the value the decision was made on**, not a progress
+marker.
+
+## Two: verification must go through the real path
+
+**All three "fixed" reports were false, because the test took the convenient path:**
+
+| What was tested | What the user does | Difference |
+|---|---|---|
+| `restore --gui-errors` | menu → `recycle --gui-errors` → internal `restore --quiet` | `fromMenu` is the opposite |
+| `[ShellSelect]::Go(...)` called on its own | the call site inside Roboc | proving the API works is not proving the program calls it |
+| three paths passed explicitly | three items selected in the shell | `TryCollectFromMenu` overwrites them with the shell's answer |
+
+**A proxy metric is not verification**: a live process, a changed window count, an API that
+works on its own — **none of these is guaranteed to hold on the real path.**
+
+## Three: look at every item a scan turns up
+
+**This round's automated scan reported 36 i18n gaps and 9 orphan methods, and checking them one
+by one showed every one to be a false positive:**
+
+| What the scanner said | The truth |
+|---|---|
+| 36 "bare Chinese strings" | Multi-line `Lang.Pick(Chinese, English)` calls, with the Chinese on the first line |
+| 4 "English side missing" | `"OK"` and `"No"` are two letters long, and the threshold was three |
+| 7 "orphan methods" | P/Invoke declarations, method groups passed as arguments, delegate assignments |
+| 3 "TODO"s | The substring inside `RtlNtStatusToDosError` — the letters of "ToDo" sit in the middle of the identifier |
+| 1 `readonly` "method" | The regular expression had read a field declaration as a method |
+
+**There were only two real problems** (`MeasureOne` and `mergedIntoRestore`).
+
+**A scanner's value is narrowing the field to something that can be checked by hand, not
+handing over a conclusion.**
+
+## Four: ask before a destructive operation
+
+**Two changes in that batch involved deletion:**
+
+- `ReplaceWith` deletes the destination before moving in (when the user chooses "replace")
+- Merging directories moves the contents of a folder the user already had
+
+**Both got the same thing right: the decision was handed to the user rather than made for
+them.** "Keep the original" means **keep it in the bin**, not delete it — **because what the
+user chose was "keep", not "discard".**
+
+## Five: something shared must actually be shared
+
+**`OriginalsOf` serves both the dialog and the restore**, and its comment says:
+
+> Shared by the confirmation that names them and the restore that performs them, so **the
+> dialog cannot promise one path while the move goes to another.**
+
+**This round broke it once**: the dialog resolved the original paths before the restore, and the
+restore **resolved them again** — the second pass had to fail, because the index had been
+cleared. **Sharing one variable would have prevented it.**
+
+## Six: look for the capability the project already has
+
+**`Shell32.SelectInFolder` already wrapped `SHOpenFolderAndSelectItems` (native multi-select),
+and the paste path had been using it all along.**
+
+**Instead, an `explorer.exe /select` version was written for the restore path, and it can select
+only one item at a time.**
+
+> **The capability was already in the project; the mistake was not looking.**
+
+**Search before writing something new — especially around P/Invoke, where wheels are easy to
+reinvent.**
+
+---
+
+# 17. "A new window after a paste": an investigation that followed a dead end to a conclusion
+
+**This section and section 15 are two instances of the same family of problem.** The difference
+is that this time the way out was not a log but **checking before changing** — and it produced a
+reusable decision: **when to stop tuning parameters and go and find out whether the path itself
+exists.**
+
+## Symptom
+
+**The destination folder's window was already open, and pasting into it produced another window
+on the same folder.** The user has to close it by hand. Reproducible every time.
+
+**This symptom cannot be judged by counting windows.** The old window is still there and one
+more has appeared, **so the total is the same in the "normal" and the "broken" case**. The only
+trustworthy criterion is whether the set of window **identities** (HWNDs) changed across the
+call. `bench/window-reuse-probe.ps1` is written that way.
+
+## The dead end, and why it is dead
+
+**The approach**: instead of `SHOpenFolderAndSelectItems`, find the window showing the
+destination yourself and set the selection in it.
+
+**Step one**: `IServiceProvider::QueryService(SID_STopLevelBrowser, IID_IShellBrowser)` to get
+`IShellBrowser`, then `QueryActiveShellView` to get `IShellView`.
+
+**The result**:
+
+| Call style | Return value |
+|---|---|
+| Hand-written vtable dispatch (no managed marshalling) | `E_NOINTERFACE` |
+| Managed COM interop | `S_OK`, plus an 8-byte **unaligned** pointer, `0xE072C` |
+
+**Calling `Marshal.Release` on `0xE072C` crashed three times.**
+
+**The conclusion at the time was "my declaration is wrong".** That conclusion is false, and a
+very tempting one: two call styles give different answers, so one of them must be misdeclared.
+
+**The real answer only comes out of the documentation:**
+
+1. `QueryService` is declared **`[local]`** in `servprov.h` — it is not an oleautomation method,
+   and can only be forwarded through an in-process proxy
+2. `IShellBrowser` itself contains `[local]` methods (`SendControlMsg`, `SetToolbarItems`),
+   `IShellView` contains `[local] AddPropertySheetPages`, and `IFolderView` is entirely
+   `[unique][object]`, not dual
+3. **An interface with `[local]` members cannot be marshalled in full at all**, so by design it
+   is in-process only
+4. Microsoft's own stated precondition for `IShellBrowser` is: **"Objects that have access to
+   the site chain of the browser"**
+
+**So the path does not exist for an external process. The declaration was not wrong; there is no
+road.** That `E_NOINTERFACE` was the truth, and `S_OK` with a garbage pointer was the illusion.
+
+**One earlier misjudgement corrected along the way**: `Shell.Application`'s `Windows()` returns
+an **`IShellWindows` collection, not an `IWebBrowser2`**. The collection's `IServiceProvider`
+does answer `S_OK` — and that is exactly what made the dead end look promising. `LocationURL`,
+`HWND` and `Document` are properties of the **elements**.
+
+**Why the managed side answered `S_OK` with garbage**: when a `[ComImport]` interface is missing
+`[PreserveSig]`, the CLR moves the return value into an **extra out parameter**, the whole
+argument list shifts with it, and `out nint` reads a stack slot that was never written. **It
+presents as success, which is more dangerous than a crash.**
+
+## A reusable decision
+
+> **If the same place keeps coming back after several rounds, that is not "nearly there", it is
+> "the model is wrong". Stop, and make "why does this keep recurring" the problem itself.**
+
+**The recurring shape here was**: the same API, with one report saying it reuses the window and
+another saying it does not, and both experiments reproducible.
+
+**The right move was to ask whether the API ever promised to reuse the window, instead of
+continuing to tune parameters.** The answer:
+
+- The **entire** window-related text in MSDN for `SHOpenFolderAndSelectItems` is one sentence:
+  *"Opens a Windows Explorer window with specified items in a particular folder selected."*
+- It **never promises to reuse a window that is already open**, and it documents **no condition
+  under which it would open a new one instead**
+- `dwFlags` defines exactly two values, `OFASI_EDIT` and `OFASI_OPENDESKTOP`
+  (`ShlObj_core.h`)
+- `SHOpenFolderAndSelectItemsEx` **does not exist** (one declaration of
+  `SHOpenFolderAndSelectItems` in the whole 10.0.26100 header tree, and none of the `Ex` form)
+
+**A behaviour that was never promised is not worth tuning for.** That is the stopping point.
+
+## The fix
+
+**Stop relying on that API's reuse behaviour and set the selection yourself**, along the path
+already known to work:
+
+```
+Shell.Application -> Windows() -> element -> Document -> IShellFolderViewDual::SelectItem
+```
+
+**Only when no window is showing the destination does it fall back to the original API** — and
+in that case opening a window is the desired behaviour, so the fallback is not a compromise.
+
+**Two traps found by measurement**:
+
+| Trap | Consequence |
+|---|---|
+| Matching the folder by `LocationURL` | The address-bar string turns a **space** into `%20` while leaving **Chinese characters** alone, so a naive comparison fails on every folder name that contains a space |
+| Passing `SVSI_DESELECTOTHERS` (0x4) with every item | Its meaning is **"deselect everything else"**, not "begin a new selection". Three items left only the last one selected, **which looks like success from outside** |
+
+**The second trap can only be found by testing with more than one item.** With a single item the
+test passes while the bug is present.
+
+## Three things this section should leave behind
+
+**One: a proxy metric is not verification** (代理指标不算验证). An API that works when called on
+its own, an unchanged window count, a process that reported no error — any of these can hold on
+the path you tested and fail on the path the user takes. **The acceptance criterion is the path
+the user takes.**
+
+**Two: distinguish "I wrote it wrong" from "this path does not exist".** The first means
+changing code; the second means changing direction. **The criterion is the documented
+preconditions**, not a success rate you arrived at by trying. A success rate arrived at by
+trying gets masked by "sometimes it works" for a long time.
+
+**Three: the capability may already be in the project.** Section 5E and section 16's sixth point
+have both recorded the same thing, and this round proved it once more: `ExplorerSelection` was
+already enumerating windows through `Shell.Application`, already able to match a folder, and
+already serving the "more than fifteen items selected" problem on the production path. **The
+only thing missing was the step that sets a selection in a window that is already open.**
