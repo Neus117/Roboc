@@ -1020,7 +1020,7 @@ growing in someone else's drive root.**
 
 **The user's words: 「你这样很不规范。」** ("This is very unprofessional.") That is correct.
 
-## Two rules
+## Three rules
 
 **1. Build in a fixed place**
 
@@ -1031,11 +1031,37 @@ artifacts\scratch\        <- every temporary directory and file
 
 **Never** `D:\<something>-test`. The drive root belongs to the user, not to the build system.
 
-**2. Cleanup must scan and confirm; memory is not enough**
+**And never create a new top-level directory inside the project as a scratch area.** On
+2026-10-14 I created `D:\Coding\MyRobocLab` to hold a few probe scripts. The name carried the
+project's name, so it looked legitimate — which makes it *more* dangerous than `D:\xxx-test`:
+**it will not be recognised as rubbish.** It was folded into the repository's `bench\` that same
+day, and the directory itself deleted.
+
+**2. Delete on the spot, not "at the end of the round"**
+
+**The user asked for this explicitly on 2026-10-14**: 「以后每次生成临时测试文件并完成相关目标后及时删除」 — every
+time temporary test files are created, delete them promptly once the goal is met.
+
+**Why "clean up at the end" is not enough**: a round of work contains many moments at which "the
+goal is met", and the end is always further away. By then, **what was created has to come from
+memory** — and memory misses things (see rule 3). That day I created at least seven `H:\roboc-*`
+test directories; every one of them was useless the moment its experiment finished, and every one
+of them survived until the final scan.
+
+**The practice**: the experiment finishes, the conclusion is in hand, delete it. Scripts should be
+written that way too — `bench\window-reuse-probe.ps1` closes the windows it opened **whatever the
+result**, and `worker-sweep.ps1` empties its target after every round.
+
+**3. Cleanup must scan and confirm; memory is not enough**
 
 This is the rule that was actually broken. Cleanup ran twice that day, reported "deleted" both
 times, and missed something both times — **because the directories were listed from memory
 rather than found by scanning the disk.**
+
+**On the final sweep of that day, scanning turned up two more that I had "already finished"**:
+`artifacts\scratch\g-src` / `g-dst` (leftovers from an earlier guard test), and two documents that
+should never have been inside the repository at all. **Every "I thought that was done" was
+overturned by a scan.**
 
 ```powershell
 # wrong: list them from memory
