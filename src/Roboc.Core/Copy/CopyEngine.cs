@@ -483,7 +483,7 @@ public static class CopyEngine
 
             if (isDirectory)
             {
-                GuardAgainstSelfCopy(source, destinationRoot, raw, destinationDisplay);
+                GuardAgainstSelfCopy(source, leaf, destinationRoot, raw, destinationDisplay);
                 plans.Add(new SourcePlan(source, leaf + '\\', true, 0, 0, 0, 0, 0));
             }
             else
@@ -514,12 +514,23 @@ public static class CopyEngine
     }
 
     /// <summary>
-    /// Refuses a copy whose destination lies inside one of its own sources. Left
-    /// unchecked this does not merely duplicate work, it walks the directory it is
-    /// writing into and never terminates.
+    /// Refuses a copy that would walk the directory it is writing into.
+    ///
+    /// Left unchecked that does not merely duplicate work: the enumeration finds what has
+    /// just been written, writes it again, and never terminates.
+    ///
+    /// <b>What was wrong with the second test.</b> It refused whenever the source sat
+    /// anywhere beneath the destination -- "the source is inside the destination" -- and
+    /// that is not the same condition. Lifting a folder up a level is the ordinary case:
+    /// taking H:\a\b\c to H:\a creates H:\a\c, a sibling of H:\a\b and nowhere near the
+    /// source. Explorer allows it; this refused it, from the menu, with nothing the user
+    /// could act on. Reported as "paste does nothing".
+    ///
+    /// The condition that matters is where the copy will <i>land</i>. It is recursive only
+    /// when that path is inside a source -- H:\a\b\c into H:\a\b would create H:\a\b\c\c.
     /// </summary>
     private static void GuardAgainstSelfCopy(
-        string sourceDir, string destinationRoot, string rawSource, string destinationDisplay)
+        string sourceDir, string leaf, string destinationRoot, string rawSource, string destinationDisplay)
     {
         string sourceWithSeparator = PathUtil.EnsureTrailingSeparator(sourceDir);
 
@@ -529,10 +540,33 @@ public static class CopyEngine
                 $"refusing to copy '{rawSource}' into itself: destination '{destinationDisplay}' is inside the source");
         }
 
-        if (sourceWithSeparator.StartsWith(destinationRoot, StringComparison.OrdinalIgnoreCase))
+        // Copying a directory into the folder that already holds it lands on the source
+        // itself. Not recursion -- the conflict pass deals with the name collision -- but it
+        // is also never what was meant, and saying so is clearer than a folder that refuses
+        // to be replaced by itself.
+        if (string.Equals(destinationRoot, sourceDir, StringComparison.OrdinalIgnoreCase))
         {
             throw new IOException(
-                $"refusing to copy '{rawSource}' into '{destinationDisplay}': the source is inside the destination");
+                $"refusing to copy '{rawSource}' into itself: '{destinationDisplay}' is where it already is");
+        }
+
+        if (leaf.Length == 0)
+        {
+            // A volume root has no name to land under. Guarded elsewhere, and nothing here
+            // can say anything useful about it.
+            return;
+        }
+
+        // The leaf is passed in rather than worked out again, so this test and the plan that
+        // decides where the copy actually goes cannot disagree. Computed twice, the two would
+        // be free to drift -- and a guard checking a different path from the one the copy
+        // uses is worse than no guard, because it reports safety it never verified.
+        string landing = PathUtil.EnsureTrailingSeparator(Path.Combine(destinationRoot, leaf));
+
+        if (landing.StartsWith(sourceWithSeparator, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new IOException(
+                $"refusing to copy '{rawSource}' into '{destinationDisplay}': it would land inside itself");
         }
     }
 

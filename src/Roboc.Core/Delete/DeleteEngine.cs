@@ -372,9 +372,18 @@ public static class DeleteEngine
             job.Control.WaitWhilePaused();
             job.Control.ThrowIfCancellationRequested();
 
-            if (FastDeleter.TryDelete(path, directory, out ErrorKind kind, out int code, out string message))
+            if (FastDeleter.TryDelete(
+                    path, directory, out ErrorKind kind, out int code, out string message,
+                    out long deletedBytes))
             {
-                job.Progress.AddFileCompleted(0);
+                // The size, not a zero.
+                //
+                // A hardcoded zero here meant bytesDone never moved on this path, so
+                // bytesPerSecond stayed at zero and the progress window had no speed to plot:
+                // it drew the graph area, drew the gridlines behind it, and then nothing --
+                // for every deletion, of any size. The staged path (TryStage) had always
+                // reported bytes; this one never had.
+                job.Progress.AddFileCompleted(deletedBytes);
                 return;
             }
 

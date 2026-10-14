@@ -333,9 +333,13 @@ public static class ContextMenuInstaller
         using RegistryKey parent = Root.CreateSubKey(parentPath);
         parent.SetValue("MUIVerb", "Roboc");
 
-        // The parent keeps the executable's icon: it stands for the program, and the
-        // entries below it stand for the actions.
-        parent.SetValue("Icon", quotedExe + ",0");
+        // The parent's icon follows the Windows app theme.
+        //
+        // It used to be the executable's own icon resource -- quotedExe + ",0" -- which
+        // cannot be switched: a resource index is fixed, and the ICO format has no theme
+        // axis to switch on either. Naming a file is what makes the choice possible at all,
+        // and it is the same artwork: Roboc.ico is what the executable embeds.
+        parent.SetValue("Icon", ThemeIcon(executablePath));
 
         // Player: one invocation carrying every selected file, rather than one
         // invocation per file.
@@ -615,6 +619,108 @@ public static class ContextMenuInstaller
         }
 
         return executablePath;
+    }
+
+    /// <summary>The program's own entry icon, by theme. Only this one varies.</summary>
+    private const string LightThemeIcon = "Roboc.ico";
+    private const string DarkThemeIcon = "Roboc-dark.ico";
+
+    /// <summary>
+    /// True when Windows is set to dark app mode.
+    ///
+    /// AppsUseLightTheme rather than SystemUsesLightTheme: the context menu follows the app
+    /// theme, which is the setting the user changes under Personalisation &gt; Colours &gt;
+    /// "Choose your default app mode".
+    ///
+    /// Absent means light. A profile that has never touched the setting has no value at all,
+    /// and light is also the safer guess -- the light icon is the one that is legible on
+    /// both backgrounds, which is why it is the default everywhere else too.
+    /// </summary>
+    private static bool IsDarkAppsTheme()
+    {
+        try
+        {
+            using RegistryKey? personalize = Registry.CurrentUser.OpenSubKey(
+                @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+
+            return personalize?.GetValue("AppsUseLightTheme") is int light && light == 0;
+        }
+        catch (System.Security.SecurityException) { return false; }
+        catch (IOException) { return false; }
+    }
+
+    /// <summary>
+    /// Whether Windows is set to dark app mode, for callers outside this class.
+    ///
+    /// The windows need it too, and for a different reason: their title-bar icon is drawn by
+    /// the program rather than by the shell, so it can follow the theme with no lag at all --
+    /// unlike the menu entry, which is a registry string Explorer reads when it builds the
+    /// menu.
+    /// </summary>
+    public static bool DarkAppsTheme => IsDarkAppsTheme();
+
+    /// <summary>The icon file for the program's own entry, in the current theme.</summary>
+    private static string ThemeIcon(string executablePath)
+        => IconFor(executablePath, IsDarkAppsTheme() ? DarkThemeIcon : LightThemeIcon);
+
+    /// <summary>
+    /// Points the program's own menu entry at the icon for the current theme.
+    ///
+    /// <b>Why this is done here and not by the shell.</b> A static verb's Icon value is a
+    /// fixed path. The ICO format has no theme axis -- Explorer picks a frame by size, for
+    /// DPI, and nothing else -- and there is no IconDark value to set beside Icon. The only
+    /// way to vary it at runtime is to run inside Explorer, which means a native
+    /// IExplorerCommand shell extension and an MSVC toolchain this project does not build
+    /// with. Writing the registry is the whole of the alternative.
+    ///
+    /// <b>What it costs.</b> One use of lag. Explorer reads the value when it builds the menu,
+    /// so the menu that is already open when the theme changes keeps the icon it was built
+    /// with, and the next right-click has the new one. Nothing else: this is a registry read,
+    /// a string comparison, and a write only when the two differ -- and SelfHeal, which calls
+    /// it, already runs on every start.
+    ///
+    /// <b>Why comparing rather than remembering.</b> No bookkeeping key records what was last
+    /// applied. The registry already holds the answer, so reading it back is both simpler and
+    /// self-correcting: a value someone else changed, or one left behind by an older version,
+    /// is put right by the same comparison.
+    /// </summary>
+    public static int SyncThemeIcon(string executablePath, Action<string>? log = null)
+    {
+        bool dark = IsDarkAppsTheme();
+        string wanted = IconFor(executablePath, dark ? DarkThemeIcon : LightThemeIcon);
+        int changed = 0;
+
+        foreach ((string path, _) in Parents)
+        {
+            try
+            {
+                using RegistryKey? key = Root.OpenSubKey(ClassesRoot + @"\" + path, writable: true);
+
+                // Not installed, or installed for another user: nothing to keep in step.
+                if (key is null)
+                {
+                    continue;
+                }
+
+                if (key.GetValue("Icon") as string == wanted)
+                {
+                    continue;
+                }
+
+                key.SetValue("Icon", wanted);
+                changed++;
+            }
+            catch (UnauthorizedAccessException) { }
+            catch (System.Security.SecurityException) { }
+            catch (IOException) { }
+        }
+
+        if (changed > 0)
+        {
+            log?.Invoke($"menu icon set to the {(dark ? "dark" : "light")} variant, {changed} key(s)");
+        }
+
+        return changed;
     }
 
     /// <summary>"@*\shell\Roboc" becomes "@*\shell".</summary>

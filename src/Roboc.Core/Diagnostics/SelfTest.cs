@@ -177,6 +177,7 @@ internal static class SelfTest
             Check("FILE_BASIC_INFO / FILE_STANDARD_INFO / FILE_ID_INFO", () => ProbeFileInfo(scratch));
             Check("delete read-only file in one call", () => ProbeReadOnlyDelete(scratch));
             Check("delete a directory tree with the fast deleter", () => ProbeTreeDelete(scratch));
+        Check("deleting reports the size it removed", () => ProbeDeleteReportsSize(scratch));
             Check("NTSTATUS -> Win32 error mapping", ProbeErrorMapping);
             Check("journal round-trips completion and checkpoints", () => ProbeJournalRoundTrip(scratch));
             Check("journal recovers from a truncated tail", () => ProbeJournalTruncated(scratch));
@@ -619,6 +620,37 @@ internal static class SelfTest
         Assert(FastDeleter.TryDelete(extended, directory: false, out _, out int code, out string message),
             $"fast delete failed: {NativeError.DescribeWin32(code)} {message}");
         Assert(!File.Exists(path), "file survived a successful POSIX delete");
+    }
+
+    /// <summary>
+    /// Deleting reports the size of what it deleted.
+    ///
+    /// The delete progress window plots a speed graph from the byte counter the engine feeds
+    /// it. AddFileCompleted was called with a hardcoded zero on this path, so bytesDone never
+    /// moved, bytesPerSecond stayed at zero, and the chart drew its frame and its gridlines
+    /// and then no line at all -- for every deletion of every size, with nothing anywhere
+    /// reporting a problem. The window looked like a chart with no data because that is
+    /// exactly what it was.
+    ///
+    /// The staged path had always reported bytes, which is why only the unstaged one came up
+    /// blank. This pins the value down, so a refactor that drops it fails here rather than
+    /// quietly emptying the graph again.
+    /// </summary>
+    private static void ProbeDeleteReportsSize(string scratch)
+    {
+        const int Payload = 12_345;
+
+        string path = Path.Combine(scratch, "sized-for-delete.bin");
+        File.WriteAllBytes(path, new byte[Payload]);
+
+        Assert(
+            FastDeleter.TryDelete(
+                PathUtil.ToExtended(path), directory: false,
+                out _, out int code, out string message, out long reported),
+            $"fast delete failed: {NativeError.DescribeWin32(code)} {message}");
+
+        Assert(!File.Exists(path), "file survived a successful delete");
+        Assert(reported == Payload, $"delete reported {reported} bytes for a {Payload}-byte file");
     }
 
     private static void ProbeTreeDelete(string scratch)

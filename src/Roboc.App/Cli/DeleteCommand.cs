@@ -164,7 +164,20 @@ internal static class DeleteCommand
         {
             // Guard refusals land here. They are the intended outcome for a
             // dangerous target, not a crash.
-            Console.Error.WriteLine(Lang.Pick($"操作失败：{ex.Message}", $"Failed: {ex.Message}"));
+            string message = Lang.Pick($"操作失败：{ex.Message}", $"Failed: {ex.Message}");
+            Console.Error.WriteLine(message);
+
+            // And told to the user, for the same reason the copy path now does.
+            //
+            // A refused delete is exactly the case where the user most needs to hear the
+            // reason -- the guard exists because the target was dangerous to touch, and a menu
+            // invocation that writes that reason to a console nobody has leaves the user
+            // believing nothing happened, or worse, that it worked.
+            if (fromMenu)
+            {
+                MaintenanceCommands.ReportProblemPublic(true, message);
+            }
+
             return 4;
         }
 

@@ -174,6 +174,22 @@ internal static class CopyCommand
         catch (Exception ex)
         {
             Console.Error.WriteLine($"roboc: {ex.Message}");
+
+            // Told to the user as well, when there is a user to tell.
+            //
+            // This is where every guard refusal lands -- a destination inside its own source, a
+            // folder into itself -- and it used to write to stderr and return. Invoked from the
+            // context menu there is no console, so a refused paste said nothing anywhere: not a
+            // message the user could act on, not even an indication that the program had run.
+            // Reported as "paste does nothing".
+            //
+            // The text is the guard's own, and it names both paths involved -- which is what
+            // makes it actionable rather than merely informative.
+            if (args.Flag("--gui-errors"))
+            {
+                MaintenanceCommands.ReportProblemPublic(true, ex.Message);
+            }
+
             return 1;
         }
 
@@ -290,9 +306,28 @@ internal static class CopyCommand
 
         if (result.FilesFailed == 0 && result.Errors.Count == 0)
         {
-            // Silence on success, as Explorer is silent: the files appearing is the
-            // report. Only a failure carries information the user cannot otherwise
-            // get.
+            // Silence on success, as Explorer is silent: the files appearing is the report.
+            // Only a failure carries information the user cannot otherwise get.
+            //
+            // With one exception, and it is the one that produced a bug report. A paste where
+            // nothing was copied because everything was already there is not a success the user
+            // can see: the files were there before and they are there after, so the screen does
+            // not change and nothing was said. From the outside that is indistinguishable from
+            // the program failing to run at all -- and it is what "the paste does nothing" and
+            // "it finishes instantly, is it cheating?" both turned out to be.
+            //
+            // Only when nothing at all was copied. A paste that added one file among nine
+            // thousand skipped ones has shown its work, and interrupting that with a dialog
+            // would be noise.
+            if (result.FilesCopied == 0 && result.FilesSkipped > 0)
+            {
+                MaintenanceCommands.ReportProblemPublic(
+                    true,
+                    Lang.Pick(
+                        $"ℹ️没有需要复制的项目：目标位置的 {result.FilesSkipped:N0} 项与来源完全相同。",
+                        $"ℹ️Nothing needed copying: the {result.FilesSkipped:N0} items at the destination are already identical to the source."));
+            }
+
             return;
         }
 

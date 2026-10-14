@@ -47,6 +47,18 @@ internal static class ShellCommand
         {
             ContextMenuInstaller.SyncPaste(ClipboardFiles.Get().Count > 0, out _);
         }
+
+        // The program's own entry takes the icon for the current Windows app theme.
+        //
+        // After the sync above rather than before it, and for the same reason: this is the
+        // path every launch takes, so it is the only place the theme can be noticed at all.
+        // Nothing here is expensive -- a registry read and a string comparison in the
+        // ordinary case -- and the comparison is against the value already in the registry,
+        // so a theme that has not changed writes nothing.
+        //
+        // Failures are not reported. A menu icon is the least important thing this program
+        // does, and a registry that refuses the write has already been reported by Install.
+        ContextMenuInstaller.SyncThemeIcon(ExecutablePath, log);
     }
 
     /// <summary>Puts the selected paths on the clipboard as a file list.</summary>

@@ -1,4 +1,4 @@
-﻿using Roboc.Core.Diagnostics;
+using Roboc.Core.Diagnostics;
 using Roboc.Core.Fs;
 using Roboc.Core.Interop;
 using Roboc.Core.Model;
@@ -23,7 +23,26 @@ internal static class FastDeleter
 
     public static bool TryDelete(
         string extendedPath, bool directory, out ErrorKind kind, out int win32Code, out string message)
+        => TryDelete(extendedPath, directory, out kind, out win32Code, out message, out _);
+
+    /// <summary>
+    /// Deletes one entry, and reports how large it was.
+    ///
+    /// <b>The size is free here and nowhere else.</b> It comes from the handle this method
+    /// has already opened, with one NtQueryInformationFile on a handle that is about to be
+    /// closed anyway -- no second path resolution, no second open, no second seek.
+    ///
+    /// It exists because the delete progress window drew its speed graph from a byte counter
+    /// nothing was feeding. AddFileCompleted was called with a hardcoded zero, so bytesDone
+    /// never moved, bytesPerSecond stayed at zero, and the chart had a row of zeroes to draw
+    /// -- which it drew as nothing at all. The graph area was there, the gridlines behind it
+    /// were there, and the line could not appear for any deletion of any size.
+    /// </summary>
+    public static bool TryDelete(
+        string extendedPath, bool directory,
+        out ErrorKind kind, out int win32Code, out string message, out long size)
     {
+        size = 0;
         string trimmed = PathUtil.TrimTrailingSeparator(extendedPath);
 
         int status = Open(trimmed, directory, out nint handle);
@@ -45,6 +64,21 @@ internal static class FastDeleter
 
         try
         {
+            // Best effort. A length that cannot be read is reported as zero rather than
+            // failing the delete: the entry is going away regardless, and refusing to remove
+            // it because its size could not be read would be the wrong trade by a distance.
+            unsafe
+            {
+                FILE_STANDARD_INFO standard;
+
+                if (Ntdll.NtQueryInformationFile(
+                        handle, out _, &standard, (uint)sizeof(FILE_STANDARD_INFO),
+                        NativeConst.NtFileStandardInformation) == 0)
+                {
+                    size = standard.EndOfFile;
+                }
+            }
+
             var disposition = new FILE_DISPOSITION_INFO_EX
             {
                 Flags = NativeConst.FILE_DISPOSITION_FLAG_DELETE
