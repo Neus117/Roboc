@@ -1316,7 +1316,15 @@ internal static class MaintenanceCommands
         {
             try
             {
-                Shell32.SelectInFolder(folder, items);
+                // The window showing this folder, when there is one, gets the selection
+                // set in it. SHOpenFolderAndSelectItems opens a second window on a folder
+                // that is already on screen -- it reuses nothing, which is not what its
+                // documentation implies and is what the paste path was changed for.
+                // Restoring into a folder the user is looking at had the same defect.
+                if (!ExplorerSelection.TrySelectInExistingWindow(folder, items))
+                {
+                    Shell32.SelectInFolder(folder, items);
+                }
             }
             catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
             {

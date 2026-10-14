@@ -273,7 +273,20 @@ internal static class ShellCommand
 
             if (changed.Count > 0)
             {
-                Shell32.SelectInFolder(destination, changed);
+                // The window already showing the destination gets the selection, so that
+                // a paste into a folder the user is looking at does not open a second
+                // window on the same folder.
+                //
+                // SHOpenFolderAndSelectItems is documented only as "opens a Windows
+                // Explorer window with specified items selected" -- it promises nothing
+                // about reusing one that is already open, and it does not: creating the
+                // new entries invalidates the destination window's view and the call
+                // opens another window beside it. False here means no window was showing
+                // the folder, and that is exactly the case where opening one is right.
+                if (!ExplorerSelection.TrySelectInExistingWindow(destination, changed))
+                {
+                    Shell32.SelectInFolder(destination, changed);
+                }
             }
         }
 

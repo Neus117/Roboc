@@ -18,3 +18,8 @@ scripts/results/
 
 # 测试产物。见开发者文档「十四、测试卫生」。
 artifacts/scratch/
+
+# Python 字节码缓存。tools\ 下的脚本是构建期工具，不是产品的一部分，
+# 但它们的缓存目录会出现在 git status 里，看着像待提交的新文件。
+__pycache__/
+*.pyc

@@ -8,14 +8,21 @@
           整个过程不碰你的任何真实卷。
 
     用法（右键"以管理员身份运行 PowerShell"，然后）：
-        powershell -ExecutionPolicy Bypass -File "D:\Coding\DeepSeek Harness\workspace\Roboc\scripts\disk-full-test.ps1"
+        powershell -ExecutionPolicy Bypass -File <仓库根>\scripts\disk-full-test.ps1
 
     结果写入 scripts\disk-full-result.txt，跑完告诉我，我来读。
 #>
 
 $ErrorActionPreference = 'Stop'
 
-$root   = "D:\Coding\DeepSeek Harness\workspace\Roboc"
+# 按脚本自身的位置定位仓库根，不写死绝对路径。
+#
+# 写死过的代价：仓库从 D:\Coding\DeepSeek Harness\workspace\Roboc 搬到
+# D:\Coding\MyGitHub\Roboc 之后，这个脚本仍然指向旧路径 —— 而它是个**要提权、
+# 要挂 VHD** 的脚本，跑起来会以管理员权限在已经不存在的目录上工作。
+#
+# $PSScriptRoot 在 param() 默认值里是空的（PowerShell 5.1 的坑），所以在这里算。
+$root   = Split-Path -Parent $PSScriptRoot
 $exe    = Join-Path $root "artifacts\portable\Roboc.exe"
 $work   = Join-Path $root "scripts\diskfull"
 $vhd    = Join-Path $work "roboc-test.vhd"
