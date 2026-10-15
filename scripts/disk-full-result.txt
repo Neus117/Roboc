@@ -1,4 +1,4 @@
-﻿=== 磁盘满行为测试 2026-10-13 09:53:58 ===
+﻿=== 磁盘满行为测试 2026-10-15 14:15:54 ===
 
 [1] 创建 256 MB 动态 VHD
 
@@ -34,15 +34,15 @@ DiskPart 成功格式化该卷。
 
 DiskPart 成功地分配了驱动器号或装载点。
 
-    挂载成功，R: 可用 252,784,640 字节
+    挂载成功，R: 可用 254,361,600 字节
 
 [2] 造源数据（一个 300 MB 文件 + 200 个小文件）
-    源共 314,972,800 字节，目标可用 252,784,640 字节 —— 必然写满
+    源共 314,972,800 字节，目标可用 254,361,600 字节 —— 必然写满
 
 [3] 执行复制（预期：磁盘满，干净中止）
 
     退出码 : 3
-    耗时   : 0.41 秒
+    耗时   : 0.45 秒
 
     --- stdout ---
       state     Cancelled
@@ -51,15 +51,16 @@ DiskPart 成功地分配了驱动器号或装载点。
       failed    1
       bytes     224.4 MB
       elapsed   0.19s
-      rate      1,035 files/s, 1.13 GB/s
+      rate      1,045 files/s, 1.15 GB/s
       workers   16
       first 1 error(s):
         [DiskFull] WriteFile \\?\R:\dest\source\big.bin.roboc-tmp
             磁盘空间不足。 (0x00000070)
     --- stderr ---
       ! 磁盘空间不足，任务已中止。已完成的项目保留，尚未处理的项目未开始。
-      ! 发现 1 个残留的暂存文件（未删除，供你确认后再处理）：
-      !   R:\dest\source\big.bin.roboc-tmp
+      ! 发现 1 个残留的暂存文件，共 240 MB（未删除，供你确认后再处理）：
+      !         240 MB  R:\dest\source\big.bin.roboc-tmp
+      ! 这些是上一次传输留下的临时文件。确认无用后删除它们可释放 240 MB，然后重新执行复制。
 
 [4] 检查目标中的残留暂存文件
     目标文件总数     : 201
@@ -74,6 +75,25 @@ DiskPart 成功地分配了驱动器号或装载点。
 [6] 第二次运行：确认重复执行不会累积残留
     第二次退出码     : 3
     残留暂存文件     : 1  （第一次是 1）
+
+    --- 第二次 stdout ---
+    resuming a previously interrupted job; finished items will be skipped
+      state     Cancelled
+      copied    0
+      skipped   200
+      failed    1
+      bytes     0 B
+      elapsed   0.10s
+      rate      0 files/s, 0 B/s
+      workers   16
+      first 1 error(s):
+        [DiskFull] WriteFile \\?\R:\dest\source\big.bin.roboc-tmp
+            磁盘空间不足。 (0x00000070)
+    --- 第二次 stderr ---
+      ! 磁盘空间不足，任务已中止。已完成的项目保留，尚未处理的项目未开始。
+      ! 发现 1 个残留的暂存文件，共 240 MB（未删除，供你确认后再处理）：
+      !         240 MB  R:\dest\source\big.bin.roboc-tmp
+      ! 这些是上一次传输留下的临时文件。确认无用后删除它们可释放 240 MB，然后重新执行复制。
 
 === 测试完成 ===
 
