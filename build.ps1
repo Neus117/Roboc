@@ -227,9 +227,37 @@ if (-not $SkipSelfTest) {
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
     $p = [System.Diagnostics.Process]::Start($psi)
-    $out = $p.StandardOutput.ReadToEnd()
-    $err = $p.StandardError.ReadToEnd()
-    $p.WaitForExit()
+
+    # Read both streams asynchronously, then wait with a timeout.
+    #
+    # Why a timeout matters here and why the order is not the point:
+    #
+    #   A bare WaitForExit() waits for ever. If the self-test ever raises a modal
+    #   dialog -- or simply wedges -- the build hangs with no output saying what it
+    #   is waiting for. This is the only publish path, so a hang here means no
+    #   release. Measured 2026-10-15: the same shape waiting on a child that never
+    #   exits was still running after 12 seconds, and would still be running now.
+    #
+    #   The order of ReadToEnd versus WaitForExit turns out NOT to be the hazard it
+    #   was recorded as: .NET's Process starts a background reader for each stream
+    #   when the first read begins, so a synchronous ReadToEnd-before-WaitForExit
+    #   handled 20 KB of output without deadlocking. That claim is corrected here
+    #   rather than left standing.
+    #
+    #   Async reads are still what this uses: they cost nothing here and they let the
+    #   timeout fire while the output is still being collected.
+    $stdoutTask = $p.StandardOutput.ReadToEndAsync()
+    $stderrTask = $p.StandardError.ReadToEndAsync()
+
+    if (-not $p.WaitForExit(120000)) {
+        $p.Kill()
+        $p.WaitForExit(10000)
+        throw "自检超过 120 秒未结束，已终止。它可能弹出了窗口在等人点击。"
+    }
+
+    $out = $stdoutTask.GetAwaiter().GetResult()
+    $err = $stderrTask.GetAwaiter().GetResult()
+
     cmd /c rd /s /q "$scratch" 2>$null | Out-Null
 
     foreach ($line in ($out -split "`r?`n")) {

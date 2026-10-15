@@ -108,9 +108,22 @@ function Invoke-Timed {
 
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     $p = [System.Diagnostics.Process]::Start($psi)
-    $stdout = $p.StandardOutput.ReadToEnd()
-    $stderr = $p.StandardError.ReadToEnd()
-    $p.WaitForExit()
+
+    # 异步读 + 超时。裸 WaitForExit() 会一直等：若被测程序弹窗或卡住，
+    # 整个对照测试就挂在那里，而且没有输出说明它在等什么。
+    # 顺序本身不是危害 —— .NET 的 Process 在第一次读时会为两个流各起后台读取
+    # 线程，实测 20 KB 输出也不死锁。真正的问题是【没有超时】。
+    $stdoutTask = $p.StandardOutput.ReadToEndAsync()
+    $stderrTask = $p.StandardError.ReadToEndAsync()
+
+    if (-not $p.WaitForExit(600000)) {
+        $p.Kill()
+        $p.WaitForExit(10000)
+        throw "被测程序超过 600 秒未结束，已终止：$($psi.FileName) $($psi.Arguments)"
+    }
+
+    $stdout = $stdoutTask.GetAwaiter().GetResult()
+    $stderr = $stderrTask.GetAwaiter().GetResult()
     $sw.Stop()
 
     # The output is returned, not discarded. Throwing it away made an earlier run of

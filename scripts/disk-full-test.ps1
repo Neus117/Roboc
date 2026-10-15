@@ -126,9 +126,22 @@ assign letter=$letter
 
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     $proc = [System.Diagnostics.Process]::Start($psi)
-    $out = $proc.StandardOutput.ReadToEnd()
-    $err = $proc.StandardError.ReadToEnd()
-    $proc.WaitForExit()
+
+    # 异步读 + 超时。裸 WaitForExit() 会一直等：磁盘满的场景本来就慢，而万一
+    # 复制卡住或弹窗，这个脚本会挂在那里且不说明在等什么。
+    # 顺序本身不是危害 —— .NET 的 Process 在第一次读时会为两个流各起后台读取
+    # 线程。真正的问题是【没有超时】。
+    $outTask = $proc.StandardOutput.ReadToEndAsync()
+    $errTask = $proc.StandardError.ReadToEndAsync()
+
+    if (-not $proc.WaitForExit(1800000)) {
+        $proc.Kill()
+        $proc.WaitForExit(10000)
+        throw "复制超过 1800 秒未结束，已终止"
+    }
+
+    $out = $outTask.GetAwaiter().GetResult()
+    $err = $errTask.GetAwaiter().GetResult()
     $sw.Stop()
 
     Write-Result ("    退出码 : {0}" -f $proc.ExitCode)
@@ -184,9 +197,19 @@ assign letter=$letter
     $psi2.RedirectStandardOutput = $true
     $psi2.RedirectStandardError = $true
     $p2 = [System.Diagnostics.Process]::Start($psi2)
-    $out2 = $p2.StandardOutput.ReadToEnd()
-    $err2 = $p2.StandardError.ReadToEnd()
-    $p2.WaitForExit()
+
+    # 同上：异步读 + 超时。这一处是第二次运行，同样的原因。
+    $out2Task = $p2.StandardOutput.ReadToEndAsync()
+    $err2Task = $p2.StandardError.ReadToEndAsync()
+
+    if (-not $p2.WaitForExit(1800000)) {
+        $p2.Kill()
+        $p2.WaitForExit(10000)
+        throw "第二次复制超过 1800 秒未结束，已终止"
+    }
+
+    $out2 = $out2Task.GetAwaiter().GetResult()
+    $err2 = $err2Task.GetAwaiter().GetResult()
 
     $temps2 = @(Get-ChildItem $dest -Recurse -Force -File -EA SilentlyContinue |
                 Where-Object { $_.Name -like '*roboc-tmp*' })

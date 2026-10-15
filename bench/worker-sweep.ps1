@@ -114,9 +114,23 @@ foreach ($w in $workerCounts) {
     $psi.Arguments = $quoted -join ' '
 
     $proc = [System.Diagnostics.Process]::Start($psi)
-    $stdout = $proc.StandardOutput.ReadToEnd()
-    $stderr = $proc.StandardError.ReadToEnd()
-    $proc.WaitForExit()
+
+    # 异步读 + 超时。这一轮 worker 对照在 HDD 上可以跑几分钟，所以超时给得宽；
+    # 但裸 WaitForExit() 是完全不设上限 —— 一旦某一轮卡住，整个扫描就停在那里，
+    # 而且没有输出说明它在等什么。
+    # 顺序本身不是危害 —— .NET 的 Process 在第一次读时会为两个流各起后台读取
+    # 线程。真正的问题是【没有超时】。
+    $stdoutTask = $proc.StandardOutput.ReadToEndAsync()
+    $stderrTask = $proc.StandardError.ReadToEndAsync()
+
+    if (-not $proc.WaitForExit(1800000)) {
+        $proc.Kill()
+        $proc.WaitForExit(10000)
+        throw "workers=$w 这一轮超过 1800 秒未结束，已终止"
+    }
+
+    $stdout = $stdoutTask.GetAwaiter().GetResult()
+    $stderr = $stderrTask.GetAwaiter().GetResult()
 
     $sw.Stop()
     [System.IO.File]::WriteAllText($log, $stdout + "`r`n--- stderr ---`r`n" + $stderr,
