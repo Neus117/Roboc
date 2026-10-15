@@ -1,5 +1,6 @@
 using Roboc.Core.Control;
 using Roboc.Core.Copy;
+using Roboc.Core.Diagnostics;
 using Roboc.Core.Fs;
 using Roboc.Core.Model;
 using Roboc.Core.Progress;
@@ -94,6 +95,29 @@ internal static class CopyCommand
         // "CreateDirectory failed for 8&1&0000#{6ac27878-...}: the system cannot find the
         // path specified" -- the same fault, reported in the same internal language.
         if (!RejectNonFileSystemPaths(sources, destination, args.Flag("--gui-errors")))
+        {
+            return 4;
+        }
+
+        // The destination is then actually created, here, before the window exists.
+        //
+        // Being a file-system path is not the same as being a path this machine can
+        // make. A destination whose parent does not exist -- a folder deleted while the
+        // menu was open, or a mistyped one -- passes the check above and then fails in
+        // the engine at CreateDirectory. By then the progress window has been started,
+        // and the same ordering defect above returns: the dialog opens first and the
+        // blank window appears behind it.
+        //
+        // Reported by the user on 2026-10-15 after the multi-select verbs were fixed:
+        // pasting to a target that had been deleted left the error dialog and an empty
+        // 正在复制 window on screen together.
+        //
+        // Creating it here is idempotent -- reaching a directory that already exists
+        // reports success -- so the engine finds it already there and does not repeat
+        // the work. Doing the real operation rather than a probe has the same advantage
+        // the paste path already relies on for sources: it costs one syscall and it
+        // cannot disagree with what the engine will do next.
+        if (!RejectUnusableDestination(destination, args.Flag("--gui-errors")))
         {
             return 4;
         }
@@ -382,6 +406,65 @@ internal static class CopyCommand
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Creates the destination before the progress window exists, and reports failure
+    /// with a sentence that names the cause.
+    ///
+    /// Returns true when the destination is ready.
+    ///
+    /// <b>Why the real creation and not a probe.</b> The engine creates the destination
+    /// as its first act, so doing it here means the engine finds it already there
+    /// instead of doing the work twice. A separate "can I create this?" test would be a
+    /// second implementation of the same decision, free to disagree with the one that
+    /// matters -- the same reasoning that keeps the paste path from re-deriving its
+    /// sources.
+    ///
+    /// <b>Why the message names the cause.</b> The engine's version is
+    /// <c>CreateDirectory failed for &lt;path&gt;: 系统找不到指定的路径。(0x00000003)</c>
+    /// -- the API call's name, in English, followed by a Windows error string. What a
+    /// user needs is that the folder above the target does not exist and that nothing
+    /// was copied. The system's own description is still appended, because it is the
+    /// part that distinguishes a missing parent from a denied one, and because a report
+    /// is worth more when it carries the original words.
+    /// </summary>
+    private static bool RejectUnusableDestination(string destination, bool fromMenu)
+    {
+        string extended = PathUtil.TrimTrailingSeparator(PathUtil.ToExtended(destination));
+
+        if (DirectoryOps.CreateIfMissing(extended, out int error) || DirectoryOps.Exists(extended))
+        {
+            return true;
+        }
+
+        // Two different faults, and telling them apart is worth one sentence: a missing
+        // drive has no parent to go looking for.
+        string drive = Path.GetPathRoot(PathUtil.ToDisplay(extended)) ?? string.Empty;
+        bool driveExists = drive.Length > 0 && DirectoryOps.Exists(PathUtil.ToExtended(drive));
+
+        string message = driveExists
+            ? Lang.Pick(
+                $"⚠️目标位置的上层文件夹不存在，无法在其中创建：\r\n\r\n{destination}\r\n\r\n" +
+                $"请先在资源管理器中创建它，或改粘贴到已有的文件夹。\r\n\r\n（{NativeError.DescribeWin32(error)}）",
+                $"⚠️The folder above the destination does not exist, so nothing can be created in it:\r\n\r\n{destination}\r\n\r\n" +
+                $"Create it in Explorer first, or paste into a folder that exists.\r\n\r\n({NativeError.DescribeWin32(error)})")
+            : Lang.Pick(
+                $"⚠️目标位置的驱动器不存在或未就绪：\r\n\r\n{destination}\r\n\r\n" +
+                $"请确认该驱动器已连接。\r\n\r\n（{NativeError.DescribeWin32(error)}）",
+                $"⚠️The drive for the destination does not exist or is not ready:\r\n\r\n{destination}\r\n\r\n" +
+                $"Check that it is connected.\r\n\r\n({NativeError.DescribeWin32(error)})");
+
+        if (fromMenu)
+        {
+            MaintenanceCommands.ReportProblemPublic(true, message);
+        }
+        else
+        {
+            Console.Error.WriteLine("roboc: " + message.Replace("\r\n\r\n", " "));
+        }
+
+        return false;
     }
 
     /// <summary>Shows the explanation: a dialog from the menu, stderr from a terminal.</summary>
