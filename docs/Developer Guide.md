@@ -347,6 +347,22 @@ prefix is a file-system path. It does not test existence and is not a general pa
 grammar — it answers only the question the caller actually has: **could a Win32 file API mean
 anything by this string?**
 
+**Note that it accepts UNC**: a network share works. That is why the wording says "the file
+system" and not "the **local** file system", and why the limitation is stated as "MTP and any
+other storage" rather than "MTP and **local** storage" — either narrower phrasing would tell
+everyone with a mapped drive or a NAS that their setup is unsupported, which is false.
+
+**The wording lives in one place**: `Roboc.Core.Fs.NonFileSystemNotice`. It has **two forms**,
+deliberately:
+
+| Form | Used by | Why |
+|---|---|---|
+| `Text` | the dialogs on the copy and delete paths | there is room to explain |
+| `Reason` | the failure lists on the recycle and restore paths | ten such lines can appear in one dialog, and the full explanation would bury the list it belongs to |
+
+The earlier version was written out in five places in four different phrasings; that is gone.
+Changing a sentence is now one edit.
+
 **This is a design principle**: where a tool cannot do something, saying so beats doing half of
 it — and **reporting your own limitation as the other side's fault is the worst version of all.**
 

@@ -258,7 +258,14 @@ internal static class MaintenanceCommands
             if (notFileSystem is not null)
             {
                 failed++;
-                Console.Error.WriteLine(Lang.Pick($"roboc: 无法回收 {path}：{notFileSystem}", $"roboc: cannot recycle {path}: {notFileSystem}"));
+
+                // Deliberately without the path. In the dialog that path was long enough to
+                // push the reason off the visible area; here it would make one failure line
+                // the width of three. Nothing is lost: a namespace path identifies a device
+                // to nobody, and when the selection is several items the device's own name is
+                // already on screen behind the terminal.
+                Console.Error.WriteLine(Lang.Pick("roboc: 无法回收该项目", "roboc: cannot recycle this item")
+                    + " -- " + notFileSystem);
                 continue;
             }
 
@@ -307,7 +314,7 @@ internal static class MaintenanceCommands
                 // wrapped reason landed out of sight. Leading with the label and dropping
                 // the identifier keeps the whole sentence visible, and the identifier told
                 // the user nothing anyway.
-                failures.Add(Lang.Pick($"读不了：{notFileSystem}", $"cannot read: {notFileSystem}"));
+                failures.Add(notFileSystem);
                 continue;
             }
 
@@ -351,12 +358,13 @@ internal static class MaintenanceCommands
     /// drive cannot hold a bin, which reports this program's limitation as a fault of the
     /// user's device.
     ///
-    /// The wording is <see cref="NonFileSystemNotice"/>'s, so that the verbs and the
-    /// engines cannot drift apart. It is returned rather than shown because the callers
-    /// differ: one writes to stderr, another collects lines for a dialog.
+    /// Returns <see cref="NonFileSystemNotice.Reason"/> -- the one-line form -- rather than
+    /// the full explanation, because every caller puts this into a failure list where ten
+    /// such lines may appear at once. The dialog form is shown by the copy and delete paths,
+    /// which reject the whole operation instead of listing it.
     /// </summary>
     private static string? ExplainNonFileSystemPath(string path)
-        => NonFileSystemNotice.IsUsable(path) ? null : NonFileSystemNotice.Text;
+        => NonFileSystemNotice.IsUsable(path) ? null : NonFileSystemNotice.Reason;
 
     /// <summary>
     /// Puts recycled items back where they came from.
@@ -409,7 +417,7 @@ internal static class MaintenanceCommands
 
             if (notFileSystem is not null)
             {
-                failures.Add(Lang.Pick($"读不了：{notFileSystem}", $"cannot read: {notFileSystem}"));
+                failures.Add(notFileSystem);
                 continue;
             }
 
