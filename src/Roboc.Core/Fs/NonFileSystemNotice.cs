@@ -46,22 +46,27 @@ internal static class NonFileSystemNotice
     /// <summary>
     /// The explanation, in full. Callers decide how to show it -- a dialog from the menu,
     /// stderr from a terminal -- because that difference is theirs, not this text's.
+    ///
+    /// The closing note is a parenthetical rather than a sentence, so it carries no full
+    /// stop of its own. That is a deliberate deviation from the rest of the program's
+    /// messages, which are standalone sentences -- settled by the user while reviewing the
+    /// layout, and it reads correctly: the note qualifies the sentence before it instead of
+    /// standing as a fourth paragraph.
     /// </summary>
     public static string Text => Lang.Pick(
         "⚠️这个位置不在文件系统内。\r\n\r\n" +
         "便携设备（手机、相机等以 MTP 连接）、库、搜索结果、压缩包里的内容由资源管理器用 " +
         "shell 命名空间表示，没有文件系统路径。\r\n\r\n" +
-        "本工具无法在 MTP 设备与其它存储之间传送文件，请使用资源管理器。\r\n\r\n" +
-        "支持与否取决于路径能否表示成文件系统路径，与存储介质类型无关。",
+        "本工具无法在 MTP 设备与其它存储之间传送文件，请使用资源管理器。" +
+        "（支持与否取决于路径能否表示成文件系统路径，与存储介质类型无关）",
 
         "⚠️This location is not in the file system.\r\n\r\n" +
         "Content inside a portable device (a phone or camera connected over MTP), a library, " +
         "a search result or an archive is represented by Explorer through the shell namespace " +
         "and has no file system path.\r\n\r\n" +
         "This tool cannot move files between an MTP device and any other storage; use Explorer " +
-        "for that.\r\n\r\n" +
-        "What matters is whether a location has a file system path, not what kind of storage " +
-        "it is.");
+        "for that. (What matters is whether a location has a file system path, not what kind of " +
+        "storage it is.)");
 
     /// <summary>
     /// The same refusal for a failure list: the reason, short enough that ten of them do not
@@ -75,12 +80,15 @@ internal static class NonFileSystemNotice
     /// what stays out is the full explanation and the supported-storage aside, which belong
     /// to the dialog.
     ///
-    /// No path, and no separate advice line: a list is read for which items failed.
+    /// "此位置" rather than a bare list of examples, because this line is shown *about* one
+    /// item: the parenthesis says where that item is, not what kinds of place exist.
+    ///
+    /// No path: a list is read for which items failed.
     /// </summary>
     public static string Reason => Lang.Pick(
-        "读不了：它不在文件系统内（便携设备、库、搜索结果或压缩包），这些由资源管理器用 " +
-        "shell 命名空间表示，没有文件系统路径可供本工具读取。",
-        "cannot read: it is not in the file system (a portable device, library, search result " +
-        "or archive). Explorer represents those through the shell namespace, so there is no " +
-        "file system path for this tool to read.");
+        "读不了：它不在文件系统内（此位置在便携设备、库、搜索结果或压缩包），" +
+        "这些由资源管理器用 shell 命名空间表示，没有文件系统路径可供本工具读取。",
+        "cannot read: it is not in the file system (this location is a portable device, a " +
+        "library, a search result or an archive). Explorer represents those through the shell " +
+        "namespace, so there is no file system path for this tool to read.");
 }
