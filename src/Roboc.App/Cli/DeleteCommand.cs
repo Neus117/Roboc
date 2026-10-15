@@ -197,7 +197,10 @@ internal static class DeleteCommand
             // believing nothing happened, or worse, that it worked.
             if (fromMenu)
             {
-                MaintenanceCommands.ReportProblemPublic(true, message);
+                MaintenanceCommands.ReportProblemPublic(
+                    true,
+                    message,
+                    Lang.Pick("无法彻底删除", "Cannot Delete Permanently"));
             }
 
             return 4;
@@ -242,7 +245,10 @@ internal static class DeleteCommand
 
             if (fromMenu)
             {
-                MaintenanceCommands.ReportProblemPublic(true, NonFileSystemNotice.Text);
+                MaintenanceCommands.ReportProblemPublic(
+                    true,
+                    NonFileSystemNotice.Text,
+                    Lang.Pick("这里无法操作", "Not a File System Item"));
             }
             else
             {

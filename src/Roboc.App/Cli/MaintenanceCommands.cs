@@ -65,7 +65,7 @@ internal static class MaintenanceCommands
         }
 
         return ShowDialog(
-            text.ToString().TrimEnd(), Lang.Pick("Roboc — 取回确认", "Roboc — Confirm restore"),
+            text.ToString().TrimEnd(), Lang.Pick("取回确认", "Confirm Restore"),
             warning: false, ask: true, centre: true);
     }
 
@@ -116,7 +116,8 @@ internal static class MaintenanceCommands
         if (paths.Count == 0)
         {
             ReportProblem(fromMenuEarly, Lang.Pick("⚠️没有收到任何选中的项目。\r\n\r\n", "⚠️No items were received.\r\n\r\n") +
-                Lang.Pick("如果这条是从右键菜单调用的，说明选中项没有传达到子菜单。", "If this was invoked from the context menu, the selection did not reach the submenu."));
+                Lang.Pick("如果这条是从右键菜单调用的，说明选中项没有传达到子菜单。", "If this was invoked from the context menu, the selection did not reach the submenu."),
+                Lang.Pick("没有收到选中项目", "No Items Received"));
             return 2;
         }
 
@@ -129,7 +130,7 @@ internal static class MaintenanceCommands
 
         if (paths.Count == 0)
         {
-            ReportProblem(fromMenuEarly, Lang.Pick("⚠️没有收到任何选中的项目。", "⚠️No items were received."));
+            ReportProblem(fromMenuEarly, Lang.Pick("⚠️没有收到任何选中的项目。", "⚠️No items were received."), Lang.Pick("没有收到选中项目", "No Items Received"));
             return 2;
         }
 
@@ -190,7 +191,7 @@ internal static class MaintenanceCommands
 
             if (fromMenuEarly && restoreErrors.Length > 0)
             {
-                ReportProblem(true, restoreErrors);
+                ReportProblem(true, restoreErrors, Lang.Pick("取回失败", "Restore Failed"));
             }
 
             // Opened here rather than inside Restore, and the distinction matters.
@@ -341,7 +342,9 @@ internal static class MaintenanceCommands
             text += Lang.Pick($"\r\n\r\n（另有 {failures.Count - 10} 项未显示）", $"\r\n\r\n({failures.Count - 10} more not shown)");
         }
 
-        ShowDialog(text, Lang.Pick("Roboc 回收", "Roboc — Recycle"), warning: true, centre: true);
+        // Names the outcome, not the verb: this dialog only ever reports failures, and a
+        // caption reading 回收 described what the user had already asked for.
+        ShowDialog(text, Lang.Pick("回收失败", "Recycle Failed"), warning: true, centre: true);
         return 3;
     }
 
@@ -382,7 +385,7 @@ internal static class MaintenanceCommands
 
         if (paths.Count == 0)
         {
-            ReportProblem(fromMenu, Lang.Pick("⚠️没有收到任何选中的项目。", "⚠️No items were received."));
+            ReportProblem(fromMenu, Lang.Pick("⚠️没有收到任何选中的项目。", "⚠️No items were received."), Lang.Pick("没有收到选中项目", "No Items Received"));
             return 2;
         }
 
@@ -570,7 +573,7 @@ internal static class MaintenanceCommands
                         $"⚠️原路径已经存在 {conflicts.Count:N0} 个同名文件，默认保留回收站副本，\r\n你可以自行删除。",
                         $"⚠️{conflicts.Count:N0} files with the same name already exist at the original location.\r\n"
                         + "The recycle bin copies have been kept, and you can delete them yourself."),
-                    Lang.Pick("Roboc — 原路径已有同名文件", "Roboc — Name already exists at the original location"),
+                    Lang.Pick("原路径已有同名文件", "Name Already Exists"),
                     warning: true,
                     centre: true);
             }
@@ -620,7 +623,7 @@ internal static class MaintenanceCommands
                     text.AppendLine();
                 }
 
-                ReportProblem(true, text.ToString().TrimEnd());
+                ReportProblem(true, text.ToString().TrimEnd(), Lang.Pick("清空回收站失败", "Could Not Empty the Bin"));
             }
 
             // Revealed after the event, not before it, and the item rather than the folder.
@@ -693,7 +696,7 @@ internal static class MaintenanceCommands
             {
                 ShowDialog(
                     Lang.Pick("♻️回收站是空的，没有可回收的内容。", "♻️The recycle bin is empty."),
-                    Lang.Pick("Roboc 回收站", "Roboc — Recycle bin"),
+                    Lang.Pick("回收站为空", "Recycle Bin Empty"),
                     warning: false,
                     centre: true);
 
@@ -729,7 +732,7 @@ internal static class MaintenanceCommands
             {
                 ShowDialog(
                     Lang.Pick("♻️回收站是空的，没有可回收的内容。", "♻️The recycle bin is empty."),
-                    Lang.Pick("Roboc 回收站", "Roboc — Recycle bin"),
+                    Lang.Pick("回收站为空", "Recycle Bin Empty"),
                     warning: false,
                     centre: true);
 
@@ -828,7 +831,8 @@ internal static class MaintenanceCommands
         if (paths.Count == 0)
         {
             ReportProblem(fromMenu, Lang.Pick("⚠️没有收到任何选中的项目。\r\n\r\n", "⚠️No items were received.\r\n\r\n") +
-                Lang.Pick("如果这条是从右键菜单调用的，说明选中项没有传达到子菜单。", "If this was invoked from the context menu, the selection did not reach the submenu."));
+                Lang.Pick("如果这条是从右键菜单调用的，说明选中项没有传达到子菜单。", "If this was invoked from the context menu, the selection did not reach the submenu."),
+                Lang.Pick("没有收到选中项目", "No Items Received"));
             return 2;
         }
 
@@ -841,7 +845,7 @@ internal static class MaintenanceCommands
 
         if (paths.Count == 0)
         {
-            ReportProblem(fromMenu, Lang.Pick("⚠️没有收到任何选中的项目。", "⚠️No items were received."));
+            ReportProblem(fromMenu, Lang.Pick("⚠️没有收到任何选中的项目。", "⚠️No items were received."), Lang.Pick("没有收到选中项目", "No Items Received"));
             return 2;
         }
 
@@ -931,7 +935,10 @@ internal static class MaintenanceCommands
                 // -- it starts with "roboc:" and carries no mark of its own, so on its
                 // own it was the one dialog in the program that did not look like the
                 // others. The engine's words are kept verbatim underneath.
-                ReportProblem(true, Lang.Pick($"⚠️彻底删除失败：\r\n\r\n{text}", $"⚠️Permanent delete failed:\r\n\r\n{text}"));
+                ReportProblem(
+                    true,
+                    Lang.Pick($"⚠️彻底删除失败：\r\n\r\n{text}", $"⚠️Permanent delete failed:\r\n\r\n{text}"),
+                    Lang.Pick("彻底删除失败", "Permanent Delete Failed"));
                 return exitCode;
             }
 
@@ -1052,7 +1059,8 @@ internal static class MaintenanceCommands
 
     // ------------------------------------------------------------------ helpers
 
-    internal static void ReportProblemPublic(bool fromMenu, string message) => ReportProblem(fromMenu, message);
+    internal static void ReportProblemPublic(bool fromMenu, string message, string? caption = null)
+        => ReportProblem(fromMenu, message, caption);
 
     /// <summary>
     /// Turns the paths from one invocation into the full selection.
@@ -1160,11 +1168,29 @@ internal static class MaintenanceCommands
         return padded + PadValue(value, ValueUnits);
     }
 
-    private static void ReportProblem(bool fromMenu, string message)
+    /// <summary>
+    /// Shows a problem, naming what went wrong.
+    ///
+    /// <b>Why the caption is a parameter.</b> Every refusal in the program surfaced
+    /// through here with one caption, 出错了 / "Something Went Wrong" -- true of all of
+    /// them and informative about none. The rest of the program's windows name the thing
+    /// they are about (正在复制, 回收站为空, 确认卸载), so a dialog titled 出错了 stood out
+    /// as the one that did not say what it was. Reported by the user on 2026-10-15.
+    ///
+    /// The default is kept for callers whose message is already a sentence about a
+    /// failure with no better short name, and for <see cref="ReportProblemPublic"/>;
+    /// every call site that can name its own case should.
+    /// </summary>
+    private static void ReportProblem(bool fromMenu, string message, string? caption = null)
     {
         if (fromMenu)
         {
-            ShowDialog(message, "Roboc", warning: false, centre: true);
+            ShowDialog(
+                message,
+                caption ?? Lang.Pick("出错了", "Something Went Wrong"),
+                warning: false,
+                centre: true);
+
             return;
         }
 
@@ -1285,7 +1311,7 @@ internal static class MaintenanceCommands
         text.AppendLine();
         text.AppendLine(Lang.Pick("确定要继续吗？", "Continue?"));
 
-        return ShowDialog(text.ToString(), Lang.Pick("Roboc — 不可恢复的操作", "Roboc — Irreversible"), warning: true, ask: true, centre: true);
+        return ShowDialog(text.ToString(), Lang.Pick("不可恢复的操作", "Irreversible Action"), warning: true, ask: true, centre: true);
     }
 
     /// <summary>
@@ -1530,7 +1556,7 @@ internal static class MaintenanceCommands
         text.AppendLine(Lang.Pick("取消：什么都不做", "Cancel: do nothing"));
 
         return MessageDialog.Show(
-            text.ToString(), Lang.Pick("Roboc — 目标已存在同名项目", "Roboc — Name already exists at the destination"), DialogButtons.YesNoCancel, warning: true, centre: true);
+            text.ToString(), Lang.Pick("目标已存在同名项目", "Name Already Exists"), DialogButtons.YesNoCancel, warning: true, centre: true);
     }
 
     /// <summary>

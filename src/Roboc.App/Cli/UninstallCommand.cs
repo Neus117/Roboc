@@ -182,7 +182,7 @@ internal static class UninstallCommand
 
         return MessageDialog.Show(
             text.ToString().TrimEnd(),
-            Lang.Pick("Roboc — 确认卸载", "Roboc — Confirm removal"),
+            Lang.Pick("确认卸载", "Confirm Removal"),
             DialogButtons.YesNo,
             warning: true) == 0;
     }
@@ -363,7 +363,7 @@ internal static class UninstallCommand
 
         MessageDialog.Show(
             text.ToString().TrimEnd(),
-            Lang.Pick("Roboc — 卸载", "Roboc — Removed"),
+            Lang.Pick("卸载完成", "Removed"),
             DialogButtons.Acknowledge,
             warning: true,
             centre: false);

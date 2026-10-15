@@ -272,7 +272,14 @@ internal static class CopyCommand
                 // makes it actionable rather than merely informative.
                 if (args.Flag("--gui-errors"))
                 {
-                    MaintenanceCommands.ReportProblemPublic(true, ex.Message);
+                    // A named caption rather than the generic one: what lands here is a
+                    // guard refusing the operation, and the guard's own sentence is the
+                    // body. 出错了 said only that something had gone wrong, above a
+                    // message that already said which thing.
+                    MaintenanceCommands.ReportProblemPublic(
+                        true,
+                        ex.Message,
+                        Lang.Pick("无法复制", "Cannot Copy"));
                 }
 
                 return 1;
@@ -491,7 +498,7 @@ internal static class CopyCommand
 
         if (fromMenu)
         {
-            MaintenanceCommands.ReportProblemPublic(true, message);
+            MaintenanceCommands.ReportProblemPublic(true, message, Lang.Pick("来源不存在", "Source Missing"));
         }
         else
         {
@@ -550,7 +557,7 @@ internal static class CopyCommand
 
         if (fromMenu)
         {
-            MaintenanceCommands.ReportProblemPublic(true, message);
+            MaintenanceCommands.ReportProblemPublic(true, message, Lang.Pick("目标不可用", "Destination Unusable"));
         }
         else
         {
@@ -565,7 +572,10 @@ internal static class CopyCommand
     {
         if (fromMenu)
         {
-            MaintenanceCommands.ReportProblemPublic(true, NonFileSystemNotice.Text);
+            MaintenanceCommands.ReportProblemPublic(
+                true,
+                NonFileSystemNotice.Text,
+                Lang.Pick("这里无法操作", "Not a File System Item"));
         }
         else
         {
@@ -605,7 +615,8 @@ internal static class CopyCommand
                     true,
                     Lang.Pick(
                         $"ℹ️没有需要复制的项目：目标位置的 {result.FilesSkipped:N0} 项与来源完全相同。",
-                        $"ℹ️Nothing needed copying: the {result.FilesSkipped:N0} items at the destination are already identical to the source."));
+                        $"ℹ️Nothing needed copying: the {result.FilesSkipped:N0} items at the destination are already identical to the source."),
+                    Lang.Pick("无需复制", "Nothing to Copy"));
             }
 
             return;
@@ -631,7 +642,7 @@ internal static class CopyCommand
             text.AppendLine(Lang.Pick("（未记录具体错误，请用 --show-journal 查看日志位置）", "(no specific errors were recorded; use --show-journal to find the log)"));
         }
 
-        MaintenanceCommands.ReportProblemPublic(true, text.ToString());
+        MaintenanceCommands.ReportProblemPublic(true, text.ToString(), Lang.Pick("复制失败", "Copy Failed"));
     }
 
     /// <summary>

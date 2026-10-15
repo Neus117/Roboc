@@ -205,7 +205,7 @@ internal static class Program
                         + "You can still use it from the command line:\r\n"
                         + "  roboc copy --to <destination> <source>\r\n"
                         + "  roboc --help   lists every command"),
-                    Lang.Pick("Roboc — 注册失败", "Roboc — Registration failed"),
+                    Lang.Pick("注册失败", "Registration Failed"),
                     DialogButtons.Acknowledge,
                     warning: true);
 
@@ -246,7 +246,13 @@ internal static class Program
         MessageDialog.Show(
             body + "\r\n\r\n" +
             Lang.Pick($"程序位置：\r\n　{folder}", $"Location:\r\n  {folder}"),
-            installed ? "Roboc" : Lang.Pick("Roboc 已就绪", "Roboc is ready"),
+            // Both branches name the outcome rather than the program. 就绪 said nothing
+            // about what had just happened, and a caption reading only "Roboc" said
+            // nothing at all -- the same as the progress windows, which name what they
+            // are doing and leave the program name to the icon.
+            installed
+                ? Lang.Pick("安装完成", "Installed")
+                : Lang.Pick("已经就绪", "Already Ready"),
             DialogButtons.Acknowledge);
 
         return 0;

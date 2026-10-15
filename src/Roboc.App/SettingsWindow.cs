@@ -150,7 +150,7 @@ internal static class SettingsWindow
             int h = frame.Bottom - frame.Top;
 
             _window = CreateWindowExW(
-                0, "RobocSettings", Lang.Pick("Roboc 设置", "Roboc Settings"),
+                0, "RobocSettings", Lang.Pick("设置", "Settings"),
                 style | WS_VISIBLE,
                 (GetSystemMetrics(0) - w) / 2, (GetSystemMetrics(1) - h) / 2,
                 w, h, 0, 0, wc.hInstance, 0);
@@ -187,7 +187,7 @@ internal static class SettingsWindow
                 MessageDialog.Show(
                     Lang.Pick($"⚠️设置无法保存：\r\n\r\n{error}\r\n\r\n", $"⚠️Settings could not be saved:\r\n\r\n{error}\r\n\r\n") +
                     Lang.Pick("程序仍按原有设置运行。", "The program will carry on with the settings it already had."),
-                    Lang.Pick("Roboc — 保存失败", "Roboc — Save failed"),
+                    Lang.Pick("保存失败", "Save Failed"),
                     DialogButtons.Acknowledge,
                     warning: true);
 
