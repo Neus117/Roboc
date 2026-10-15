@@ -51,23 +51,36 @@ internal static class NonFileSystemNotice
         "⚠️这个位置不在文件系统内。\r\n\r\n" +
         "便携设备（手机、相机等以 MTP 连接）、库、搜索结果、压缩包里的内容由资源管理器用 " +
         "shell 命名空间表示，没有文件系统路径。\r\n\r\n" +
-        "本工具无法在 MTP 设备与其它存储之间传送文件。请先用资源管理器把文件复制出来或" +
-        "复制进去，再用本工具处理那一份。",
+        "本工具无法在 MTP 设备与其它存储之间传送文件，请使用资源管理器。\r\n\r\n" +
+        "支持与否取决于路径能否表示成文件系统路径，与存储介质类型无关。",
 
         "⚠️This location is not in the file system.\r\n\r\n" +
         "Content inside a portable device (a phone or camera connected over MTP), a library, " +
         "a search result or an archive is represented by Explorer through the shell namespace " +
         "and has no file system path.\r\n\r\n" +
-        "This tool cannot move files between an MTP device and any other storage. Copy the " +
-        "files out, or in, with Explorer first, then use this tool on that copy.");
+        "This tool cannot move files between an MTP device and any other storage; use Explorer " +
+        "for that.\r\n\r\n" +
+        "What matters is whether a location has a file system path, not what kind of storage " +
+        "it is.");
 
     /// <summary>
-    /// The same refusal as one short line, for a failure list.
+    /// The same refusal for a failure list: the reason, short enough that ten of them do not
+    /// bury the list they belong to, and long enough to say what is wrong.
     ///
-    /// No path, for the reason above; and no second sentence, because a list of ten of these
-    /// is read for which items failed, not for why the whole class of them fails.
+    /// <b>Why it is not one clause.</b> An earlier attempt reduced this to
+    /// "读不了：它不在文件系统内（便携设备、库、搜索结果或压缩包）。" -- and the user's
+    /// response was that it had gone too far: it names the verdict and drops every technical
+    /// detail, so someone who does not already know what a shell namespace is learns nothing
+    /// from it. The detail that earns its place here is *why* there is no path to work with;
+    /// what stays out is the full explanation and the supported-storage aside, which belong
+    /// to the dialog.
+    ///
+    /// No path, and no separate advice line: a list is read for which items failed.
     /// </summary>
     public static string Reason => Lang.Pick(
-        "读不了：它不在文件系统内（便携设备、库、搜索结果或压缩包）。",
-        "cannot read: it is not in the file system (a portable device, library, search result or archive).");
+        "读不了：它不在文件系统内（便携设备、库、搜索结果或压缩包），这些由资源管理器用 " +
+        "shell 命名空间表示，没有文件系统路径可供本工具读取。",
+        "cannot read: it is not in the file system (a portable device, library, search result " +
+        "or archive). Explorer represents those through the shell namespace, so there is no " +
+        "file system path for this tool to read.");
 }

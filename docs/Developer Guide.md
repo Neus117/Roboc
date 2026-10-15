@@ -355,13 +355,17 @@ everyone with a mapped drive or a NAS that their setup is unsupported, which is 
 **The wording lives in one place**: `Roboc.Core.Fs.NonFileSystemNotice`. It has **two forms**,
 deliberately:
 
-| Form | Used by | Why |
-|---|---|---|
-| `Text` | the dialogs on the copy and delete paths | there is room to explain |
-| `Reason` | the failure lists on the recycle and restore paths | ten such lines can appear in one dialog, and the full explanation would bury the list it belongs to |
+| Form | Used by | Length | Why |
+|---|---|---|---|
+| `Text` | the dialogs on the copy and delete paths | 156 chars | there is room to explain, and to state the test |
+| `Reason` | the failure lists on the recycle and restore paths | 89 chars | ten such lines can appear in one dialog — but it keeps the technical detail of *why* there is no path |
+
+**`Reason` was once cut down to a single clause and the user rejected it**: 「过于简短，我更偏向于之前那个版本……不要完全丢失技术细节」 — too brief, I prefer the earlier version; do not lose the technical detail entirely. **The costs are not symmetric**: too long is merely wordy, too short teaches a reader who does not already know what a shell namespace is exactly nothing. So it keeps the mechanism and drops the full explanation and the supported-storage paragraph, which belong to the dialog.
 
 The earlier version was written out in five places in four different phrasings; that is gone.
 Changing a sentence is now one edit.
+
+**The closing line — "what matters is whether a location has a file system path, not what kind of storage it is" — answers a specific mistake.** An earlier draft read "storage types this tool supports: SSD, HDD, mapped drives or NAS". **That was wrong, and wrong in a representative way**: it omits USB sticks, optical media, VHDs, iSCSI and RAM disks; a NAS mapped to a letter uses `Z:\`, not a UNC path; and above all **it never mentions MTP, while an MTP device may itself be an SSD or an HDD** — leaving the reader to ask why their SSD phone is unsupported. **The test is the path, not the medium**; a list of media is never complete and invites the wrong conclusion from what it does contain.
 
 **This is a design principle**: where a tool cannot do something, saying so beats doing half of
 it — and **reporting your own limitation as the other side's fault is the worst version of all.**
