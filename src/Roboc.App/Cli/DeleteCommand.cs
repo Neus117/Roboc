@@ -234,35 +234,26 @@ internal static class DeleteCommand
     /// Refuses, before the progress window is started, when the item is not in the file
     /// system. Returns true when it is usable.
     ///
-    /// The message is deliberately short and does not print the namespace path: that path
-    /// is a device identifier, it means nothing to a user, and it was long enough that the
-    /// dialog had to cut it off. The device's name is what identifies the place.
+    /// The wording lives in <see cref="NonFileSystemNotice"/>: it has to fit a device used
+    /// as the source *and* as the destination, and it has to be one sentence rather than
+    /// several near-identical ones.
     /// </summary>
     private static bool RejectNonFileSystemSources(IReadOnlyList<string> sources, bool fromMenu)
     {
         foreach (string source in sources)
         {
-            if (PathUtil.LooksLikeFileSystemPath(source))
+            if (NonFileSystemNotice.IsUsable(source))
             {
                 continue;
             }
 
-            string message = Lang.Pick(
-                "⚠️这个项目不是文件系统里的内容，本工具读不了。\r\n\r\n" +
-                "它看起来在便携设备（手机、相机等以 MTP 连接）、库、搜索结果或压缩包里。\r\n\r\n" +
-                "请先用资源管理器把它复制到本地磁盘，再用本工具处理。",
-                "⚠️This item is not in the file system, so this tool cannot read it.\r\n\r\n" +
-                "It appears to be inside a portable device (a phone or camera connected over MTP), " +
-                "a library, a search result or an archive.\r\n\r\n" +
-                "Copy it to a local disk with Explorer first, then use this tool on that copy.");
-
             if (fromMenu)
             {
-                MaintenanceCommands.ReportProblemPublic(true, message);
+                MaintenanceCommands.ReportProblemPublic(true, NonFileSystemNotice.Text);
             }
             else
             {
-                Console.Error.WriteLine("roboc: " + message.Replace("\r\n\r\n", " "));
+                Console.Error.WriteLine("roboc: " + NonFileSystemNotice.Text.Replace("\r\n\r\n", " "));
             }
 
             return false;

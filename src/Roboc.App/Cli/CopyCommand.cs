@@ -359,23 +359,23 @@ internal static class CopyCommand
     /// <c>CreateDirectory failed for 8&amp;1&amp;0000#{6ac27878-...}</c> -- which names
     /// neither the problem nor what to do about it.
     ///
-    /// The message deliberately does not print the raw namespace path: it is a device
-    /// identifier that means nothing to a user, it is long enough that the dialog had to
-    /// cut it off, and the device's name is what identifies the place anyway.
+    /// The wording itself lives in <see cref="NonFileSystemNotice"/>, because the same
+    /// refusal is given by the delete path, the recycle verb and the engines, and four
+    /// near-identical copies of it had already drifted apart once.
     /// </summary>
     private static bool RejectNonFileSystemPaths(
         IReadOnlyList<string> sources, string destination, bool fromMenu)
     {
         foreach (string source in sources)
         {
-            if (!PathUtil.LooksLikeFileSystemPath(source))
+            if (!NonFileSystemNotice.IsUsable(source))
             {
                 ReportNotFileSystem(fromMenu);
                 return false;
             }
         }
 
-        if (!PathUtil.LooksLikeFileSystemPath(destination))
+        if (!NonFileSystemNotice.IsUsable(destination))
         {
             ReportNotFileSystem(fromMenu);
             return false;
@@ -384,26 +384,16 @@ internal static class CopyCommand
         return true;
     }
 
-    /// <summary>Shows the shared explanation. One wording for every entry point, so the
-    /// verbs cannot drift apart.</summary>
+    /// <summary>Shows the explanation: a dialog from the menu, stderr from a terminal.</summary>
     private static void ReportNotFileSystem(bool fromMenu)
     {
-        string message = Lang.Pick(
-            "⚠️这个位置不是文件系统里的内容，本工具读不了。\r\n\r\n" +
-            "它看起来在便携设备（手机、相机等以 MTP 连接）、库、搜索结果或压缩包里。\r\n\r\n" +
-            "请先用资源管理器把它复制到本地磁盘，再用本工具处理。",
-            "⚠️This location is not an item in the file system, so this tool cannot read it.\r\n\r\n" +
-            "It appears to be inside a portable device (a phone or camera connected over MTP), " +
-            "a library, a search result or an archive.\r\n\r\n" +
-            "Copy it to a local disk with Explorer first, then use this tool on that copy.");
-
         if (fromMenu)
         {
-            MaintenanceCommands.ReportProblemPublic(true, message);
+            MaintenanceCommands.ReportProblemPublic(true, NonFileSystemNotice.Text);
         }
         else
         {
-            Console.Error.WriteLine("roboc: " + message.Replace("\r\n\r\n", " "));
+            Console.Error.WriteLine("roboc: " + NonFileSystemNotice.Text.Replace("\r\n\r\n", " "));
         }
     }
 

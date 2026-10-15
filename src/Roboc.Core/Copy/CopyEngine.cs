@@ -476,19 +476,10 @@ public static class CopyEngine
             //
             // Without this the failure reads "source not found" followed by the device's
             // namespace identifier -- which names neither the problem nor what to do
-            // about it. See PathUtil.LooksLikeFileSystemPath for the shape of these paths.
-            if (!PathUtil.LooksLikeFileSystemPath(raw))
+            // about it. The wording is shared; see NonFileSystemNotice.
+            if (!NonFileSystemNotice.IsUsable(raw))
             {
-                throw new NotSupportedException(Lang.Pick(
-                    $"⚠️这个来源不是文件系统里的项目，本工具读不了：\r\n\r\n{raw}\r\n\r\n" +
-                    "它看起来是便携设备（手机、相机等以 MTP 连接）、库、搜索结果或压缩包里的内容 —— " +
-                    "这些由资源管理器用 shell 命名空间表示，程序无法用文件 API 打开。\r\n\r\n" +
-                    "请先用资源管理器把它复制到本地磁盘，再用本工具处理。",
-                    $"⚠️This source is not an item in the file system, so this tool cannot read it:\r\n\r\n{raw}\r\n\r\n" +
-                    "It appears to be inside a portable device (a phone or camera connected over MTP), " +
-                    "a library, a search result or an archive -- all of which Explorer represents " +
-                    "through the shell namespace, which file APIs cannot open.\r\n\r\n" +
-                    "Copy it to a local disk with Explorer first, then use this tool on that copy."));
+                throw new NotSupportedException(NonFileSystemNotice.Text);
             }
 
             string source = PathUtil.TrimTrailingSeparator(PathUtil.ToExtended(raw));

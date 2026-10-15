@@ -346,30 +346,17 @@ internal static class MaintenanceCommands
     /// <b>Why every destructive verb needs this.</b> A shell namespace item -- a phone
     /// over MTP, a library, a search result, the contents of an archive -- exposes a
     /// <c>Path</c> property and that property is a string, so it arrives through the
-    /// context menu looking exactly like a file. It is not one.
+    /// context menu looking exactly like a file. It is not one, and the failures further
+    /// down are misleading rather than merely unhelpful: the recycle verb used to say the
+    /// drive cannot hold a bin, which reports this program's limitation as a fault of the
+    /// user's device.
     ///
-    /// <b>Kept short, and with no path in it.</b> Two reports from 2026-10-15 shaped this
-    /// wording: the recycle failure dialog did not say why it failed, and the copy dialog
-    /// printed the raw namespace path, which is long enough that it was cut off and means
-    /// nothing to a user anyway. Both are about a sentence the user has to act on, not
-    /// about the identifier that caused it.
-    ///
-    /// One wording, shared by the verbs, so that the three of them cannot drift apart.
+    /// The wording is <see cref="NonFileSystemNotice"/>'s, so that the verbs and the
+    /// engines cannot drift apart. It is returned rather than shown because the callers
+    /// differ: one writes to stderr, another collects lines for a dialog.
     /// </summary>
     private static string? ExplainNonFileSystemPath(string path)
-    {
-        if (PathUtil.LooksLikeFileSystemPath(path))
-        {
-            return null;
-        }
-
-        return Lang.Pick(
-            "它不在文件系统里 —— 看起来在便携设备（手机、相机等以 MTP 连接）、库、搜索结果或压缩包里。" +
-            "请先用资源管理器复制到本地磁盘，再处理那份副本。",
-            "it is not in the file system -- it appears to be inside a portable device " +
-            "(a phone or camera connected over MTP), a library, a search result or an archive. " +
-            "Copy it to a local disk with Explorer first, then work on that copy.");
-    }
+        => NonFileSystemNotice.IsUsable(path) ? null : NonFileSystemNotice.Text;
 
     /// <summary>
     /// Puts recycled items back where they came from.
