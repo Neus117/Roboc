@@ -188,7 +188,6 @@ internal static class NativeConst
     private const uint METHOD_BUFFERED = 0;
     private const uint FILE_ANY_ACCESS = 0;
     private const uint FILE_SPECIAL_ACCESS = 0;
-    private const uint FILE_READ_ACCESS = 1;
     private const uint FILE_WRITE_ACCESS = 2;
 
     private static uint CtlCode(uint deviceType, uint function, uint method, uint access)

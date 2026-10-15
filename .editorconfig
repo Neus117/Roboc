@@ -19,6 +19,27 @@ indent_size = 4
 # 换行必须显式声明。这个项目一度用 CRLF 与 LF 混排，diff 里整文件都成了改动。
 csharp_new_line_before_open_brace = all
 
+# 未使用的私有成员 = 错误。配合 Directory.Build.props 的 EnforceCodeStyleInBuild。
+#
+# 为什么是 error 而不是 warning：项目已经要求"构建必须是零警告"（见开发者文档
+# 第七节规则 8），多一条警告本来就会被当成失败。写成 error 是为了让它在 CI 的
+# -warnaserror 之外也拦得住，而且意图更明确。
+#
+# 为什么值得单开一条：check-wiring.ps1 查的是"声明了却无人读取的属性与参数"，
+# 查不出"定义了却无人调用的私有方法"。这一类编译通过、运行无异常，只是永远
+# 不执行 —— WriteMarker 与 MeasureOne 都藏了很久。
+#
+# 2026-10-15 一次性清掉 9 处后开启：
+#   FolderShownBy（方法，被替换掉的那条路径留下的孤儿）
+#   UndoCommand.Fraction（与 DeleteCommand.Fraction 重复定义）
+#   GA_ROOT, WS_TABSTOP, WS_BORDER, WS_THICKFRAME, WS_MAXIMIZEBOX,
+#   BS_PUSHBUTTON, CW_USEDEFAULT（未使用的 Win32 常量）
+#
+# ⚠️ IDE0051 在【反射、序列化、DI 容器、XAML】四类场景会误报。
+# 本项目这四类都没有（P/Invoke 的 extern 声明没有方法体，不会被报），
+# 所以今天安全。若将来引入插件式注册或反射加载，先回来读这一段。
+dotnet_diagnostic.IDE0051.severity = error
+
 # ------------------------------------------------------------------ 脚本
 
 [*.ps1]

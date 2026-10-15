@@ -12,6 +12,15 @@
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <DebugType>embedded</DebugType>
+
+    <!-- IDE 类分析器默认只在 IDE 里跑，dotnet build 一律跳过。
+         打开它，配合 .editorconfig 里 IDE0051 = error，让"未使用的私有成员"
+         在构建时就拦下来 —— check-wiring.ps1 查不出这一类。
+
+         实测代价为 0：Rebuild 2.67 秒（关）对 2.49 秒（开），差异在噪声里，
+         而这个项目才两万行。 -->
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+
     <!-- Win11-only target; the platform-compat analyzer would flag every
          kernel32/shell32 call, which is the entirety of this codebase. -->
     <NoWarn>$(NoWarn);CA1416;CA2255</NoWarn>
