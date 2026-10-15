@@ -132,7 +132,22 @@ internal static class ShellCommand
         // it takes no arguments, and 粘贴 takes none -- so it never entered the
         // batching path and produced one dialog per selected file. 回收空间 had the
         // same defect.
-        if (fromMenu && !PendingSelection.TryClaim("paste", string.Empty, out _))
+        //
+        // TryClaimImmediate, not TryClaim. The paragraph above describes exactly what
+        // TryClaim was supposed to do here, and it did not do it: TryClaim returns
+        // true without taking the lock when the path is empty, so all four processes
+        // of a four-file selection claimed, and a paste that failed opened four
+        // dialogs. Tested on 2026-10-15: four concurrent instances, window peak four.
+        //
+        // The waiting half of TryClaim is not wanted here anyway, and its own remarks
+        // say so: nothing needs reassembling because the clipboard is the batch. What
+        // is wanted is only that one process reads it -- which is what
+        // TryClaimImmediate provides, without the settle window.
+        //
+        // The clipboard is read, never written, so the "two hundred processes writing
+        // the clipboard in turn" hazard TryClaim's comments describe does not apply;
+        // the lock is here so one paste happens, not to serialise writes.
+        if (fromMenu && !PendingSelection.TryClaimImmediate("paste"))
         {
             return 0;
         }
