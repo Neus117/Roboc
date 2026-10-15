@@ -122,6 +122,27 @@ internal static class CopyCommand
             return 4;
         }
 
+        // And the sources are checked for existing, for exactly the same reason.
+        //
+        // This is the half I missed when the destination check went in: the engine
+        // validates its sources at BuildPlans, which runs *after* the progress window
+        // has been started. A source that has gone -- pasting after the original was
+        // moved or deleted -- therefore produced the old ordering defect again: the
+        // error dialog first, then a blank 正在复制 window behind it with 暂停 and 取消
+        // that never receive a message.
+        //
+        // Reported by the user on 2026-10-15, with a screenshot, immediately after the
+        // destination half was fixed: reverting to the pre-existing behaviour is a fair
+        // thing for a report to do, because from the outside it is the same bug.
+        //
+        // The engine's own failure is a FileNotFoundException reading "source not found:
+        // <path>" -- English, and with no statement of what to do. The wording here says
+        // what has happened and which way out exists.
+        if (!RejectMissingSources(sources, args.Flag("--gui-errors")))
+        {
+            return 4;
+        }
+
         using var journal = JournalFactory.Open(
             destination, sources, args.Option("--job"),
             disabled: !settings.ResumeEnabled || args.Flag("--no-resume"), out bool resuming);
@@ -406,6 +427,78 @@ internal static class CopyCommand
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Refuses when any source no longer exists, and says which ones and what to do.
+    ///
+    /// Returns true when every source is there.
+    ///
+    /// <b>Why here and not only in the engine.</b> The engine checks this at BuildPlans,
+    /// after the progress window has been started -- so the dialog and the blank window
+    /// appear together, which is the defect the destination check above exists for. The
+    /// same reasoning applies to the same decision made about the other end of the copy.
+    ///
+    /// <b>Why all of them, not just the first.</b> The engine throws on the first missing
+    /// source and copies nothing, so a partial list would be describing a run that cannot
+    /// happen. Naming every one that has gone is one pass over a list that is already in
+    /// memory, and it saves the user a second round trip for the second missing file.
+    ///
+    /// <b>Why the wording differs from the engine's.</b> "source not found: &lt;path&gt;"
+    /// is the API's way of putting it. What happened is that the item was moved or
+    /// deleted since it was put on the clipboard, and the remedy is to put it there
+    /// again -- which is a sentence this can write and the engine cannot.
+    /// </summary>
+    private static bool RejectMissingSources(IReadOnlyList<string> sources, bool fromMenu)
+    {
+        List<string> missing = [];
+
+        foreach (string source in sources)
+        {
+            if (string.IsNullOrWhiteSpace(source))
+            {
+                continue;
+            }
+
+            if (!DirectoryOps.Exists(PathUtil.TrimTrailingSeparator(PathUtil.ToExtended(source))))
+            {
+                missing.Add(source);
+            }
+        }
+
+        if (missing.Count == 0)
+        {
+            return true;
+        }
+
+        const int Listed = 5;
+        string shown = string.Join("\r\n", missing.Take(Listed).Select(m => "  " + m));
+        string more = missing.Count > Listed
+            ? Lang.Pick($"\r\n  …另有 {missing.Count - Listed} 项", $"\r\n  …and {missing.Count - Listed} more")
+            : string.Empty;
+
+        string message = missing.Count == 1
+            ? Lang.Pick(
+                $"⚠️要复制的东西已经不在了：\r\n\r\n{shown}\r\n\r\n" +
+                $"它可能在复制之后被移动或删除了。请对它重新执行一次 Roboc → 复制。",
+                $"⚠️What was to be copied is no longer there:\r\n\r\n{shown}\r\n\r\n" +
+                $"It may have been moved or deleted since. Run Roboc → Copy on it again.")
+            : Lang.Pick(
+                $"⚠️有 {missing.Count} 项已经不在了：\r\n\r\n{shown}{more}\r\n\r\n" +
+                $"它们可能在复制之后被移动或删除了。请重新执行一次 Roboc → 复制。",
+                $"⚠️{missing.Count} items are no longer there:\r\n\r\n{shown}{more}\r\n\r\n" +
+                $"They may have been moved or deleted since. Run Roboc → Copy again.");
+
+        if (fromMenu)
+        {
+            MaintenanceCommands.ReportProblemPublic(true, message);
+        }
+        else
+        {
+            Console.Error.WriteLine("roboc: " + message.Replace("\r\n\r\n", " "));
+        }
+
+        return false;
     }
 
     /// <summary>
