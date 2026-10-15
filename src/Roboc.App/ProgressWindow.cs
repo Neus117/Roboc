@@ -64,6 +64,7 @@ internal sealed class ProgressWindow : IDisposable
     }
     private volatile bool _stop;
     private bool _cancelArmed;
+    private bool _cancelAsking;
     private volatile bool _paused;
     private string _pauseLabel = Lang.Pick("暂停", "Pause");
     private int _refreshCount;
@@ -166,6 +167,25 @@ internal sealed class ProgressWindow : IDisposable
     private const uint WM_CLOSE = 0x0010;
     private const uint WM_COMMAND = 0x0111;
     private const uint WM_TIMER = 0x0113;
+
+    /// <summary>
+    /// Our own message: the cancel confirmation has been answered, and this carries the
+    /// answer back to the window thread.
+    ///
+    /// <b>Why the confirmation cannot be shown where it was asked for.</b> The 取消 click
+    /// arrives in the window procedure, which runs on this window's own thread and inside
+    /// its own message loop. MessageDialog.Show runs a modal loop of its own, so calling
+    /// it there blocks the very loop that paints the card and handles its buttons: the
+    /// confirmation appears and the card behind it freezes -- no repaint, and neither 暂停
+    /// nor the close box does anything until the confirmation is answered. Measured on
+    /// 2026-10-15: cancel produced two windows on screen at once, the card among them
+    /// unable to respond to anything but the dialog.
+    ///
+    /// So the question is asked on a thread of its own and the answer is posted here,
+    /// where the window thread is still pumping and the card stays live while the user
+    /// decides.
+    /// </summary>
+    private const uint WM_CANCEL_ANSWER = 0x8000 + 1;
 
     private const uint WS_OVERLAPPED = 0x00000000;
     private const uint WS_CAPTION = 0x00C00000;
@@ -414,6 +434,10 @@ internal sealed class ProgressWindow : IDisposable
 
                 break;
 
+            case WM_CANCEL_ANSWER:
+                ApplyCancelAnswer(wParam);
+                return 0;
+
             case WM_CLOSE:
                 // Closing the window is a cancel request, not a way to hide it: the
                 // operation is still running and would otherwise continue invisibly.
@@ -454,7 +478,7 @@ internal sealed class ProgressWindow : IDisposable
 
     private void RequestCancel(nint hwnd)
     {
-        if (_cancelArmed)
+        if (_cancelArmed || _cancelAsking)
         {
             return;
         }
@@ -465,12 +489,38 @@ internal sealed class ProgressWindow : IDisposable
         // The same drawn dialog every other confirmation uses. A MessageBox here would
         // be the one prompt in the program with the system's font and the system's
         // corners, appearing directly on top of a card that has neither.
-        int answer = MessageDialog.Show(
-            Lang.Pick("⚠️确定要停止当前操作吗？\r\n\r\n已经完成的项目会保留，尚未处理的会被放弃。", "⚠️Stop this operation?\r\n\r\nItems already finished are kept; anything not yet started is abandoned."),
-            Lang.Pick("Roboc — 停止操作", "Roboc — Stop"),
-            DialogButtons.YesNo,
-            warning: true,
-            centre: true);
+        //
+        // Asked on its own thread, and the answer posted back. Showing it here would run
+        // a modal message loop inside this window's own loop -- see WM_CANCEL_ANSWER.
+        _cancelAsking = true;
+
+        var asker = new Thread(() =>
+        {
+            int answer = MessageDialog.Show(
+                Lang.Pick("⚠️确定要停止当前操作吗？\r\n\r\n已经完成的项目会保留，尚未处理的会被放弃。", "⚠️Stop this operation?\r\n\r\nItems already finished are kept; anything not yet started is abandoned."),
+                Lang.Pick("Roboc — 停止操作", "Roboc — Stop"),
+                DialogButtons.YesNo,
+                warning: true,
+                centre: true);
+
+            PostMessageW(hwnd, WM_CANCEL_ANSWER, answer, 0);
+        })
+        {
+            IsBackground = true,
+            Name = "Roboc cancel confirm",
+        };
+
+        asker.Start();
+    }
+
+    /// <summary>
+    /// Applies the answer to the cancel confirmation, on the window thread.
+    ///
+    /// Answers the same way as before: anything but the first button means "keep going".
+    /// </summary>
+    private void ApplyCancelAnswer(nint answer)
+    {
+        _cancelAsking = false;
 
         if (answer != 0)
         {
