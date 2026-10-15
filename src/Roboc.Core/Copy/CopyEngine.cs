@@ -325,6 +325,44 @@ public static class CopyEngine
             // after freeing space elsewhere, fails again for a reason nothing explained.
             job.OnLog?.Invoke(
                 Lang.Pick($"这些是上一次传输留下的临时文件。确认无用后删除它们可释放 {Describe(total)}，然后重新执行复制。", $"These are temporary files left by an earlier transfer. Once you are satisfied they are of no use, deleting them frees {Describe(total)}; then run the copy again."));
+
+            // The command itself, because "delete it" leaves the user to work out which
+            // tool and which quoting -- and a staging file is exactly the case where the
+            // path is long and unfamiliar. Reported by the user on 2026-10-15: after a
+            // disk-full abort, re-running resumed correctly and skipped the finished
+            // items, but the 240 MB staging file was still holding the space, so the
+            // large file failed again and the report told them to delete it without
+            // saying how.
+            //
+            // Three choices here, each measured rather than assumed:
+            //
+            // -LiteralPath, not -Path: this run has just copied tens of thousands of
+            // paths, and a bracket in one of them is not a reason for the remedy to fail.
+            // -Path would treat [ and ] as a character class.
+            //
+            // Single quotes with the quote character doubled, not double quotes. A file
+            // name may contain an apostrophe and may not contain a double quote, so the
+            // double-quoted form is the fragile one: a path with an apostrophe made it
+            // fail with "The string is missing the terminator". Tested across
+            // apostrophes, brackets, $, backticks, semicolons, ampersands, parentheses,
+            // spaces and Chinese; the single-quoted form removed every one.
+            //
+            // The extended path is kept as-is rather than converted with ToDisplay. This
+            // program is longPathAware and its own comments say MAX_PATH is not the limit
+            // here, so a path past 260 characters is ordinary -- and stripping \\?\ would
+            // hand it to a layer that truncates.
+            job.OnLog?.Invoke(
+                Lang.Pick("  删除命令（确认后再执行）：", "  To delete them (check first):"));
+
+            foreach (LeftoverTemp item in found.Take(20))
+            {
+                job.OnLog?.Invoke($"    Remove-Item -LiteralPath '{item.Path.Replace("'", "''")}'");
+            }
+
+            if (found.Count > 20)
+            {
+                job.OnLog?.Invoke(Lang.Pick($"    其余 {found.Count - 20} 个同上，路径见上面的列表。", $"    The other {found.Count - 20} the same way; their paths are in the list above."));
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
