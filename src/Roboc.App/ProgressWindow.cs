@@ -172,10 +172,6 @@ internal sealed class ProgressWindow : IDisposable
     private const uint WS_SYSMENU = 0x00080000;
     private const uint WS_VISIBLE = 0x10000000;
     private const uint WS_CHILD = 0x40000000;
-    private const uint WS_TABSTOP = 0x00010000;
-    private const uint WS_BORDER = 0x00800000;
-    private const uint WS_THICKFRAME = 0x00040000;
-    private const uint WS_MAXIMIZEBOX = 0x00010000;
 
     /// <summary>
     /// The frame the card uses: a dialog, not a document window.
@@ -200,8 +196,6 @@ internal sealed class ProgressWindow : IDisposable
     private const uint WindowStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_CLIPCHILDREN;
     private const uint WM_SIZE = 0x0005;
     private const uint SS_LEFT = 0x00000000;
-    private const uint BS_PUSHBUTTON = 0x00000000;
-    private const uint CW_USEDEFAULT = 0x80000000;
 
     private static readonly nint IdCancel = 1001;
     private static readonly nint IdPause = 1002;

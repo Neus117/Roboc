@@ -9,13 +9,6 @@ namespace Roboc.App.Cli;
 internal static class DeleteCommand
 {
     /// <summary>
-    /// Progress as a fraction, preferring bytes.
-    ///
-    /// The file count is what a copy of many small files should be measured by, but
-    /// for a copy of a few large ones it stays at zero until they all finish -- so
-    /// bytes are used whenever there are any, and the file count only as a fallback.
-    /// </summary>
-    /// <summary>
     /// Progress as a fraction, using whichever measure is actually moving.
     ///
     /// Bytes are right for a copy: they advance as data is written, and the file
@@ -315,43 +308,6 @@ internal static class DeleteCommand
 
 internal static class UndoCommand
 {
-    /// <summary>
-    /// Progress as a fraction, preferring bytes.
-    ///
-    /// The file count is what a copy of many small files should be measured by, but
-    /// for a copy of a few large ones it stays at zero until they all finish -- so
-    /// bytes are used whenever there are any, and the file count only as a fallback.
-    /// </summary>
-    /// <summary>
-    /// Progress as a fraction, using whichever measure is actually moving.
-    ///
-    /// Bytes are right for a copy: they advance as data is written, and the file
-    /// count would sit at zero for the whole of a large-file transfer. They are
-    /// useless for a delete, which reports whole items and passes zero bytes for
-    /// each -- so preferring bytes unconditionally pinned a delete at 0% from start
-    /// to finish. The same rule cannot be right for both, so the rule asks which
-    /// counter has actually advanced.
-    /// </summary>
-    private static double Fraction(ProgressSnapshot snapshot)
-    {
-        if (!snapshot.HasTotals)
-        {
-            return -1;
-        }
-
-        if (snapshot.BytesTotal > 0 && snapshot.BytesDone > 0)
-        {
-            return snapshot.BytesFraction;
-        }
-
-        if (snapshot.FilesTotal > 0)
-        {
-            return snapshot.FilesFraction;
-        }
-
-        return snapshot.BytesTotal > 0 ? snapshot.BytesFraction : 0;
-    }
-
     public static int Run(Args args)
     {
         List<string> directories = args.Positionals();

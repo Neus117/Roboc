@@ -265,7 +265,6 @@ internal static class SettingsWindow
         private static (int X, int Y) PointOf(nint lParam)
             => ((int)(lParam & 0xFFFF), (int)((lParam >> 16) & 0xFFFF));
 
-        /// <summary>Which switch row a point falls in, or -1.</summary>
         /// <summary>Which half of the language row a point falls in, or -1.</summary>
         private int HitLanguage((int X, int Y) point)
         {

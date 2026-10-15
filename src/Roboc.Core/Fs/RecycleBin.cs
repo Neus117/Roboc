@@ -610,13 +610,6 @@ public static class RecycleBin
     public readonly record struct Item(string StoredPath, string OriginalPath, bool IsDirectory, long Bytes, DateTime DiscardedAt);
 
     /// <summary>
-    /// Lists every item in one bin, with its size.
-    ///
-    /// A file is an item; a directory is an item if it carries the marker. Anything
-    /// else in the tree is scaffolding. Sizes are computed by walking, which is the
-    /// only way to know what reclaiming would actually free.
-    /// </summary>
-    /// <summary>
     /// Converts a bin from the mirrored layout to the flat one. Returns how many
     /// items were moved.
     ///
@@ -840,13 +833,6 @@ public static class RecycleBin
     }
 
     /// <summary>
-    /// Whether a bin holds anything the user put there.
-    ///
-    /// The index file and the directory itself do not count: a bin emptied by hand
-    /// leaves its index behind, and code that tests for the directory instead keeps
-    /// treating it as populated.
-    /// </summary>
-    /// <summary>
     /// Moves everything under <paramref name="source"/> into <paramref name="target"/>,
     /// merging where the two overlap.
     ///
@@ -977,6 +963,13 @@ public static class RecycleBin
         return false;
     }
 
+    /// <summary>
+    /// Lists every item in one bin, with its size.
+    ///
+    /// A file is an item; a directory is an item if it carries the marker. Anything
+    /// else in the tree is scaffolding. Sizes are computed by walking, which is the
+    /// only way to know what reclaiming would actually free.
+    /// </summary>
     public static List<Item> List(string binRoot)
     {
         var items = new List<Item>();

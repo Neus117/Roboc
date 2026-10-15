@@ -119,13 +119,6 @@ public sealed class RobocSettings
     /// Kept as data rather than as prose inside the window so the same text can be
     /// printed by `roboc settings --list`, and so an option cannot be added to the
     /// settings class without someone having to decide what to tell the user about it.
-    /// </summary>
-    /// <summary>
-    /// Every switch the settings window shows, with what it buys and what it costs.
-    ///
-    /// Kept as data rather than as prose inside the window so the same text can be
-    /// printed by `roboc settings --list`, and so an option cannot be added to the
-    /// settings class without someone having to decide what to tell the user about it.
     ///
     /// <b>A method, not a property, and that is not a style choice.</b> A static property
     /// is initialised once, on first access -- and the first access can happen before the

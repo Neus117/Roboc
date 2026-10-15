@@ -1105,14 +1105,6 @@ internal static class MaintenanceCommands
     }
 
     /// <summary>
-    /// Reports a problem where the user will actually see it.
-    ///
-    /// Invoked from the context menu there is no console, so Console.Error goes
-    /// into nothing and the verb appears to do nothing at all. That is not a
-    /// cosmetic issue: it is the difference between "this failed and here is why"
-    /// and silence.
-    /// </summary>
-    /// <summary>
     /// Display width of a string, counting a Chinese character as two columns.
     ///
     /// This is what makes the stat rows line up. Text is centred a line at a time, so
@@ -1338,13 +1330,6 @@ internal static class MaintenanceCommands
         return true;
     }
 
-    /// <summary>
-    /// Shows a folder in Explorer.
-    ///
-    /// 回收空间 is a management verb, so its useful output is the bin itself: the
-    /// user can see what is held, how large it is, and delete from there. A dialog
-    /// that only reports a total leaves them with nowhere to act.
-    /// </summary>
     /// <summary>
     /// The original location of each item in the bin, in the order given.
     ///

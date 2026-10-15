@@ -239,49 +239,6 @@ internal static class ExplorerSelection
         }
     }
 
-    /// <summary>
-    /// The folder a shell window is showing, as a real path, or null when it cannot be read.
-    ///
-    /// <b>Why not LocationURL.</b> The address bar string percent-encodes some
-    /// characters and not others -- a space arrives as <c>%20</c> while a Chinese
-    /// character does not -- so comparing it against a path from the command line fails
-    /// on exactly the folders that are hardest to notice. The automation model's own
-    /// <c>Folder.Self.Path</c> is the path, already decoded.
-    /// </summary>
-    private static string? FolderShownBy(object document)
-    {
-        try
-        {
-            object? current = document.GetType().InvokeMember(
-                "Folder", BindingFlags.GetProperty, null, document, null);
-
-            if (current is null)
-            {
-                return null;
-            }
-
-            object? self = current.GetType().InvokeMember(
-                "Self", BindingFlags.GetProperty, null, current, null);
-
-            if (self is null)
-            {
-                return null;
-            }
-
-            object? path = self.GetType().InvokeMember(
-                "Path", BindingFlags.GetProperty, null, self, null);
-
-            return path as string;
-        }
-        catch (Exception ex) when (ex is COMException
-                                      or TargetInvocationException
-                                      or InvalidOperationException
-                                      or MissingMemberException)
-        {
-            return null;
-        }
-    }
-
     /// <summary>Whether a shell window is showing the given folder.</summary>
     private static bool ShowsFolder(object document, string folder)
     {
@@ -597,7 +554,7 @@ internal static class ExplorerSelection
 
         return selected.Count > passed.Count ? selected : [];
     }
-    private const uint GA_ROOT = 2;
+
     private const uint GA_ROOTOWNER = 3;
 
     [DllImport("user32.dll")]

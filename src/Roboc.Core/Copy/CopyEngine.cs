@@ -1007,23 +1007,6 @@ public static class CopyEngine
     private readonly record struct HardLinkKey(ulong Volume, ulong Low, ulong High);
 
     /// <summary>
-    /// Turns a freshly written copy into a hard link to an earlier copy of the same
-    /// file, or records this path as the one the others should link to.
-    ///
-    /// <b>The order of operations is the whole point.</b> The obvious way -- delete the
-    /// copy, then create the link -- destroys the file when the link fails, and a link
-    /// can fail for reasons the caller cannot foresee (a destination that does not
-    /// support them, a permission that allows writing but not linking). So the link is
-    /// made first, at a temporary name beside the copy, and only then moved over it
-    /// with MOVEFILE_REPLACE_EXISTING. At every instant the destination path names
-    /// valid data: either the copy that was just written, or a link to the first copy.
-    ///
-    /// <b>Failing is allowed.</b> If the link cannot be made, the copy stays. The result
-    /// is a correct copy that merely occupies more space than it could have -- which is
-    /// a far better outcome than a missing file, and the same one the program produced
-    /// before any of this existed.
-    /// </summary>
-    /// <summary>
     /// How many file identities the link map will remember.
     ///
     /// One entry per file that has more than one name. A corpus of ten million hard
