@@ -1,4 +1,4 @@
-﻿=== 磁盘满行为测试 2026-10-15 14:15:54 ===
+﻿=== 磁盘满行为测试 2026-10-15 14:48:23 ===
 
 [1] 创建 256 MB 动态 VHD
 
@@ -26,7 +26,6 @@ DiskPart 成功地创建了指定分区。
 
 
     0 百分比已完成
-    0 百分比已完成
   100 百分比已完成
 
 
@@ -42,7 +41,7 @@ DiskPart 成功地分配了驱动器号或装载点。
 [3] 执行复制（预期：磁盘满，干净中止）
 
     退出码 : 3
-    耗时   : 0.45 秒
+    耗时   : 0.41 秒
 
     --- stdout ---
       state     Cancelled
@@ -50,8 +49,8 @@ DiskPart 成功地分配了驱动器号或装载点。
       skipped   0
       failed    1
       bytes     224.4 MB
-      elapsed   0.19s
-      rate      1,045 files/s, 1.15 GB/s
+      elapsed   0.18s
+      rate      1,104 files/s, 1.21 GB/s
       workers   16
       first 1 error(s):
         [DiskFull] WriteFile \\?\R:\dest\source\big.bin.roboc-tmp
@@ -61,6 +60,8 @@ DiskPart 成功地分配了驱动器号或装载点。
       ! 发现 1 个残留的暂存文件，共 240 MB（未删除，供你确认后再处理）：
       !         240 MB  R:\dest\source\big.bin.roboc-tmp
       ! 这些是上一次传输留下的临时文件。确认无用后删除它们可释放 240 MB，然后重新执行复制。
+      !   删除命令（确认后再执行）：
+      !     Remove-Item -LiteralPath 'R:\dest\source\big.bin.roboc-tmp'
 
 [4] 检查目标中的残留暂存文件
     目标文件总数     : 201
@@ -83,7 +84,7 @@ DiskPart 成功地分配了驱动器号或装载点。
       skipped   200
       failed    1
       bytes     0 B
-      elapsed   0.10s
+      elapsed   0.07s
       rate      0 files/s, 0 B/s
       workers   16
       first 1 error(s):
@@ -94,6 +95,8 @@ DiskPart 成功地分配了驱动器号或装载点。
       ! 发现 1 个残留的暂存文件，共 240 MB（未删除，供你确认后再处理）：
       !         240 MB  R:\dest\source\big.bin.roboc-tmp
       ! 这些是上一次传输留下的临时文件。确认无用后删除它们可释放 240 MB，然后重新执行复制。
+      !   删除命令（确认后再执行）：
+      !     Remove-Item -LiteralPath 'R:\dest\source\big.bin.roboc-tmp'
 
 === 测试完成 ===
 

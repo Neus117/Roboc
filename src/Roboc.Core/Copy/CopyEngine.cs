@@ -347,10 +347,13 @@ public static class CopyEngine
             // apostrophes, brackets, $, backticks, semicolons, ampersands, parentheses,
             // spaces and Chinese; the single-quoted form removed every one.
             //
-            // The extended path is kept as-is rather than converted with ToDisplay. This
-            // program is longPathAware and its own comments say MAX_PATH is not the limit
-            // here, so a path past 260 characters is ordinary -- and stripping \\?\ would
-            // hand it to a layer that truncates.
+            // The path goes out as the scanner found it, which is a plain path -- not the
+            // \\?\ form. An earlier version of this comment claimed the extended form was
+            // kept deliberately, on the reasoning that MAX_PATH would truncate otherwise.
+            // That was wrong and is corrected: the scanner walks with plain paths and this
+            // record carries one, and the disk-full run on 2026-10-15 printed
+            // 'R:\dest\source\big.bin.roboc-tmp' as expected. A justification that does not
+            // match the code is worse than none -- the next reader would have trusted it.
             job.OnLog?.Invoke(
                 Lang.Pick("  删除命令（确认后再执行）：", "  To delete them (check first):"));
 
