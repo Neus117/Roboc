@@ -86,6 +86,21 @@ jobs:
         shell: pwsh
         run: ./scripts/check-wiring.ps1 -Root .
 
+      # 文档块无主检查：一个 /// 块后面没等到成员，却又开始了下一块。
+      #
+      # 三类成因，2026-10-15 修掉的 8 处全是这三种：
+      #   · 成员被删，注释留在原地
+      #   · 成员被移到别处，注释没跟着走 —— 于是那个成员反而丢了文档
+      #     （RecycleBin.List 就是这样，它的说明被压在了 Migrate 上）
+      #   · 拷贝代码时把旧注释一起搬了过来
+      #
+      # 判据刻意保守：只认"一段 /// 里出现两次行首 <summary>"。
+      # 它抓不到行内形态（/// <summary>一句话。</summary>），宁可漏也不误报 ——
+      # 一个会误报的门禁会被人关掉，那比没有更糟。
+      - name: 文档块无主检查
+        shell: pwsh
+        run: ./scripts/check-adjacent-docs.ps1 -Root .
+
       - name: 图标完整性
         shell: pwsh
         run: |

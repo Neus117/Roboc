@@ -113,11 +113,15 @@ Roboc/
 ├── build.ps1                 The only sanctioned build entry point
 ├── .editorconfig             ★ .ps1 needs a BOM — the rule came from real failures
 ├── .gitattributes            Line-ending policy, binary markers
-├── .github/workflows/        CI: build, publish, self-test, three checks
+├── .github/workflows/        CI: build, publish, self-test, five checks
 ├── assets/icons/             Menu icons (copied into the package at build time, see below)
 ├── docs/                     User Guide · Developer Guide · Chinese originals · images
 ├── scripts/                  Benchmarks and checks (results/ is gitignored)
+│   ├── check-xml-comments.ps1 XML comment check (section 7)
+│   ├── check-bom.ps1         BOM check (.ps1 must carry one)
+│   ├── check-static-init.ps1 Static initialisation order
 │   ├── check-wiring.ps1      Wiring check (section 7, rules 2 and 3)
+│   ├── check-adjacent-docs.ps1 Orphaned doc block (two leading <summary> in one /// run)
 │   ├── run-bench.ps1         Benchmark run
 │   ├── run-perf.ps1          Head-to-head performance run
 │   └── disk-full-test.ps1    Disk-full behaviour (needs elevation)
