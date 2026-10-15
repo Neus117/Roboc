@@ -1,5 +1,6 @@
 using Roboc.Core.Control;
 using Roboc.Core.Delete;
+using Roboc.Core.Fs;
 using Roboc.Core.Model;
 using Roboc.Core.Progress;
 
@@ -134,6 +135,17 @@ internal static class DeleteCommand
         // shows anything, and a long one reports what is left and how long.
         bool fromMenu = args.Flag("--gui-errors");
 
+        // Checked before the progress window is started, for the reason spelled out in
+        // CopyCommand.RejectNonFileSystemSources: the window's thread is still inside its
+        // show delay when the engine's guard throws, so the dialog opens first and its
+        // modal message loop then pumps the window's pending creation message -- leaving a
+        // blank, unclosable progress window *behind* the dialog. Reported with screenshots
+        // on 2026-10-15.
+        if (!RejectNonFileSystemSources(sources, fromMenu))
+        {
+            return 4;
+        }
+
         JobResult result;
 
         // The progress window lives only as long as the operation does, and the finally
@@ -218,8 +230,48 @@ internal static class DeleteCommand
         return result.FilesFailed == 0 ? 0 : 3;
     }
 
-    private static bool ConfirmInteractively(List<string> sources)
+    /// <summary>
+    /// Refuses, before the progress window is started, when a source is not an item in the
+    /// file system. Returns true when every source is usable.
+    ///
+    /// The message is deliberately short and does not print the namespace path: that path
+    /// is a device identifier, it means nothing to a user, and it was long enough that the
+    /// dialog had to cut it off. The device name is what identifies the place.
+    /// </summary>
+    private static bool RejectNonFileSystemSources(IReadOnlyList<string> sources, bool fromMenu)
     {
+        foreach (string source in sources)
+        {
+            if (PathUtil.LooksLikeFileSystemPath(source))
+            {
+                continue;
+            }
+
+            string message = Lang.Pick(
+                "这个项目不是文件系统里的内容，本工具读不了。\r\n\r\n" +
+                "它看起来在便携设备（手机、相机等以 MTP 连接）、库、搜索结果或压缩包里。\r\n\r\n" +
+                "请先用资源管理器把它复制到本地磁盘，再用本工具处理。",
+                "This item is not in the file system, so this tool cannot read it.\r\n\r\n" +
+                "It appears to be inside a portable device (a phone or camera connected over MTP), " +
+                "a library, a search result or an archive.\r\n\r\n" +
+                "Copy it to a local disk with Explorer first, then use this tool on that copy.");
+
+            if (fromMenu)
+            {
+                MaintenanceCommands.ReportProblemPublic(true, message);
+            }
+            else
+            {
+                Console.Error.WriteLine("roboc: " + message.Replace("\r\n\r\n", " "));
+            }
+
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool ConfirmInteractively(List<string> sources)    {
         if (!ConsoleHost.HasConsole)
         {
             return false;

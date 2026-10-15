@@ -1,5 +1,6 @@
 using Roboc.Core.Control;
 using Roboc.Core.Copy;
+using Roboc.Core.Fs;
 using Roboc.Core.Model;
 using Roboc.Core.Progress;
 
@@ -75,6 +76,22 @@ internal static class CopyCommand
         };
 
         using var control = new JobControl();
+
+        // Checked before anything is created, including the progress window. The guard
+        // itself lives in the engine, but by the time the engine runs the progress window
+        // has already been started on its own thread -- and that thread is still asleep in
+        // its show delay when the engine throws. The dialog then opens first, and its modal
+        // message loop pumps the progress window's pending creation message: a blank
+        // progress window appears *behind* the dialog, with 取消 and 关闭 that never
+        // receive a message and cannot be clicked.
+        //
+        // Reported by the user on 2026-10-15, twice, with screenshots. Rejecting the source
+        // here means the window has not been started at all, which is the only clean fix.
+        if (!RejectNonFileSystemSources(sources, args.Flag("--gui-errors")))
+        {
+            return 4;
+        }
+
         using var journal = JournalFactory.Open(
             destination, sources, args.Option("--job"),
             disabled: !settings.ResumeEnabled || args.Flag("--no-resume"), out bool resuming);
@@ -316,6 +333,55 @@ internal static class CopyCommand
         const int Limit = 46;
 
         return path.Length <= Limit ? path : "…" + path[^(Limit - 1)..];
+    }
+
+    /// <summary>
+    /// Refuses, before anything is created, when a source is not an item in the file
+    /// system. Returns true when every source is usable.
+    ///
+    /// <b>Why here and not only in the engine.</b> The engine's guard fires after the
+    /// progress window has been started, and its thread is still inside the show delay at
+    /// that moment. The error dialog then opens first, and because a modal dialog runs its
+    /// own message loop, it pumps the pending creation message for the progress window:
+    /// a blank window appears behind the dialog with 取消 and 关闭 that can never be
+    /// clicked. Rejecting the source before the window exists removes the possibility
+    /// rather than trying to sequence around it.
+    ///
+    /// The message deliberately does not print the raw namespace path any more. It is a
+    /// device identifier that means nothing to a user, it is long enough that the dialog
+    /// had to cut it off, and the device name is what identifies the place anyway.
+    /// </summary>
+    private static bool RejectNonFileSystemSources(IReadOnlyList<string> sources, bool fromMenu)
+    {
+        foreach (string source in sources)
+        {
+            if (PathUtil.LooksLikeFileSystemPath(source))
+            {
+                continue;
+            }
+
+            string message = Lang.Pick(
+                "这个来源不是文件系统里的内容，本工具读不了。\r\n\r\n" +
+                "它看起来在便携设备（手机、相机等以 MTP 连接）、库、搜索结果或压缩包里。\r\n\r\n" +
+                "请先用资源管理器把它复制到本地磁盘，再用本工具处理。",
+                "This source is not an item in the file system, so this tool cannot read it.\r\n\r\n" +
+                "It appears to be inside a portable device (a phone or camera connected over MTP), " +
+                "a library, a search result or an archive.\r\n\r\n" +
+                "Copy it to a local disk with Explorer first, then use this tool on that copy.");
+
+            if (fromMenu)
+            {
+                MaintenanceCommands.ReportProblemPublic(true, message);
+            }
+            else
+            {
+                Console.Error.WriteLine("roboc: " + message.Replace("\r\n\r\n", " "));
+            }
+
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>

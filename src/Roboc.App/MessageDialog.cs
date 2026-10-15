@@ -76,6 +76,7 @@ internal static class MessageDialog
         // mixing them up draws nothing at all.
         private const uint DT_CENTER = 0x00000001;
         private const uint DT_WORDBREAK = 0x00000010;
+        private const uint DT_PATH_ELLIPSIS = 0x00004000;
         private const uint DT_CALCRECT = 0x00000400;
         private const uint DT_NOPREFIX = 0x00000800;
 
@@ -168,7 +169,7 @@ internal static class MessageDialog
             RECT measured = new() { Left = 0, Top = 0, Right = maxTextWidth, Bottom = 0 };
             DrawTextW(
                 measureDc, _text, _text.Length, ref measured,
-                DT_WORDBREAK | DT_CALCRECT | (_centre ? DT_CENTER : 0));
+                DT_WORDBREAK | DT_PATH_ELLIPSIS | DT_CALCRECT | (_centre ? DT_CENTER : 0));
             SelectObject(measureDc, previous);
             ReleaseDC(0, measureDc);
 
@@ -452,15 +453,23 @@ internal static class MessageDialog
                 Bottom = Scaled(24, _dpi) + _bodyHeight,
             };
 
-            // DT_WORDBREAK | DT_NOPREFIX. NOT DT_CALCRECT.
+            // DT_WORDBREAK | DT_NOPREFIX | DT_PATH_ELLIPSIS. NOT DT_CALCRECT.
             //
             // 0x400 is DT_CALCRECT, which measures the text and draws nothing -- it was
             // copied here from the measurement call above, and it produced dialogs with
             // buttons and no message at all. The buttons rendered because their flags
             // came from somewhere else.
+            //
+            // DT_PATH_ELLIPSIS is the safety net for a line that cannot be broken at all.
+            // DT_WORDBREAK only breaks at spaces, so one long unbroken token -- a shell
+            // namespace path, a device identifier -- overflows the 420 px column and is
+            // painted past the edge. Reported on 2026-10-15 as "the guard message is cut
+            // off". This shortens such a token from the middle, which keeps both ends of a
+            // path recognisable, and the measurement above must carry the same flag or the
+            // height it returns will not match what is drawn.
             DrawTextW(
                 buffer, _text, _text.Length, ref body,
-                DT_WORDBREAK | DT_NOPREFIX | (_centre ? DT_CENTER : 0));
+                DT_WORDBREAK | DT_NOPREFIX | DT_PATH_ELLIPSIS | (_centre ? DT_CENTER : 0));
             SelectObject(buffer, oldFont);
 
             string[] labels = Labels;

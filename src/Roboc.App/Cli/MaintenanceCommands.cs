@@ -299,7 +299,15 @@ internal static class MaintenanceCommands
 
             if (notFileSystem is not null)
             {
-                failures.Add($"{path}\r\n    {notFileSystem}");
+                // No path on the line, and the reason is not indented under one.
+                //
+                // Reported on 2026-10-15: the dialog appeared to give no reason at all.
+                // The reason was there -- but the line began with the namespace path, a
+                // single unbroken token long enough to fill the dialog's width, so the
+                // wrapped reason landed out of sight. Leading with the label and dropping
+                // the identifier keeps the whole sentence visible, and the identifier told
+                // the user nothing anyway.
+                failures.Add(Lang.Pick($"读不了：{notFileSystem}", $"cannot read: {notFileSystem}"));
                 continue;
             }
 
@@ -338,16 +346,13 @@ internal static class MaintenanceCommands
     /// <b>Why every destructive verb needs this.</b> A shell namespace item -- a phone
     /// over MTP, a library, a search result, the contents of an archive -- exposes a
     /// <c>Path</c> property and that property is a string, so it arrives through the
-    /// context menu looking exactly like a file. It is not one:
+    /// context menu looking exactly like a file. It is not one.
     ///
-    /// <code>
-    /// ::{20D04FE0-...}\\\?\usb#vid_22d9&amp;pid_2765&amp;mi_00#7&amp;...#{6ac27878-...}\SID-{10001,,493075931136}\...
-    /// </code>
-    ///
-    /// Failures downstream of that are misleading rather than merely unhelpful: the
-    /// copy engine said <c>source not found</c> and printed the identifier, and the
-    /// recycle verb said the drive cannot hold a bin. Both read as faults of the user's
-    /// device. <b>The honest answer is that this program cannot read it.</b>
+    /// <b>Kept short, and with no path in it.</b> Two reports from 2026-10-15 shaped this
+    /// wording: the recycle failure dialog did not say why it failed, and the copy dialog
+    /// printed the raw namespace path, which is long enough that it was cut off and means
+    /// nothing to a user anyway. Both are about a sentence the user has to act on, not
+    /// about the identifier that caused it.
     ///
     /// One wording, shared by the verbs, so that the three of them cannot drift apart.
     /// </summary>
@@ -359,12 +364,11 @@ internal static class MaintenanceCommands
         }
 
         return Lang.Pick(
-            "这不是文件系统里的内容 —— 它看起来在便携设备（手机、相机等以 MTP 连接）、库、搜索结果或压缩包里，" +
-            "这些由资源管理器用 shell 命名空间表示，本工具无法读取。请先用资源管理器复制到本地磁盘，再处理那份副本。",
-            "this is not an item in the file system -- it appears to be inside a portable device " +
-            "(a phone or camera connected over MTP), a library, a search result or an archive. Explorer " +
-            "represents those through the shell namespace, which this tool cannot read. Copy it to a " +
-            "local disk with Explorer first, then work on that copy.");
+            "它不在文件系统里 —— 看起来在便携设备（手机、相机等以 MTP 连接）、库、搜索结果或压缩包里。" +
+            "请先用资源管理器复制到本地磁盘，再处理那份副本。",
+            "it is not in the file system -- it appears to be inside a portable device " +
+            "(a phone or camera connected over MTP), a library, a search result or an archive. " +
+            "Copy it to a local disk with Explorer first, then work on that copy.");
     }
 
     /// <summary>
