@@ -155,6 +155,31 @@ docs/                    Documentation
 | Encrypted files (EFS) | Not specifically supported |
 | Sparse files | Not specifically supported |
 | Hard link count | Beyond one million, files are copied out and the fact is reported |
+| **Portable devices (phones, cameras — MTP)** | **Not supported, and not planned.** See below |
+
+### Why it cannot read files from a phone
+
+**An MTP device has no drive letter. It is not a file system; it is an item Explorer represents
+through the shell namespace.** Files inside it therefore **cannot be opened with the file APIs**,
+and this tool's entire engine is built on those APIs.
+
+Measured on 2026-10-15 (OnePlus Ace 5 Pro): after copying from the device, the clipboard holds
+**only `CF_HDROP`** — a single string — and that string **cannot be turned back into a readable
+item by the shell**. Six different spellings of the path were tried; all failed. **This is not
+"not done yet"; the route does not exist.**
+
+The only workable alternative is the Windows WPD interfaces, and those are **streaming and
+serial**. Multi-threading, overlapped I/O, block cloning, the resume journal — **not one of the
+optimisations this tool exists for applies.** And MTP's bottleneck is the device itself, not
+per-file overhead. **In other words, doing it would not be faster than Explorer, and being faster
+than Explorer is the problem this tool solves.**
+
+**What to do instead: copy the files from the phone to a local disk with Explorer first, then use
+Roboc on that local copy.** That is the case it is built for — very large numbers of small files —
+and the one where it is clearly faster.
+
+When you paste, recycle or delete from a device, this tool now **says exactly that**, instead of
+printing an internal identifier or failing silently.
 
 ---
 

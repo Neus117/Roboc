@@ -271,7 +271,7 @@ internal static class MessageDialog
                 DwmSetWindowAttribute(hwnd, 33, ref round, sizeof(int));
 
                 _ = ProgressTheme.Current();
-            ProgressTheme.ApplyCaptionColour(hwnd, ProgressTheme.Current());
+                ProgressTheme.ApplyCaptionColour(hwnd, ProgressTheme.Current());
                 int dark = ProgressTheme.IsDark ? 1 : 0;
 
                 if (DwmSetWindowAttribute(hwnd, 20, ref dark, sizeof(int)) != 0)

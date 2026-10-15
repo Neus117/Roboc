@@ -617,7 +617,6 @@ internal static class SettingsWindow
             DeleteObject(pen);
         }
 
-        /// <summary>The benefit, cost and advice for whichever row is selected.</summary>
         /// <summary>
         /// The benefit, cost and advice for whichever row is selected, as one block
         /// inside one panel.
@@ -779,7 +778,7 @@ internal static class SettingsWindow
                 DwmSetWindowAttribute(hwnd, 33, ref round, sizeof(int));
 
                 _ = ProgressTheme.Current();
-            ProgressTheme.ApplyCaptionColour(hwnd, ProgressTheme.Current());
+                ProgressTheme.ApplyCaptionColour(hwnd, ProgressTheme.Current());
                 int dark = ProgressTheme.IsDark ? 1 : 0;
 
                 if (DwmSetWindowAttribute(hwnd, 20, ref dark, sizeof(int)) != 0)

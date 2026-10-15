@@ -13,7 +13,6 @@ namespace Roboc.App.Cli;
 /// </summary>
 internal static class MaintenanceCommands
 {
-    /// <summary>回收 — move the selection into this tool's own recycle bin.</summary>
     /// <summary>
     /// Says what is about to happen before it happens.
     ///
@@ -107,6 +106,7 @@ internal static class MaintenanceCommands
         }
     }
 
+    /// <summary>回收 — move the selection into this tool's own recycle bin.</summary>
     public static int Recycle(Args args)
     {
         List<string> paths = args.Positionals();
@@ -248,6 +248,20 @@ internal static class MaintenanceCommands
 
         foreach (string path in paths)
         {
+            // Checked before ToExtended, which would treat a shell namespace item as a
+            // relative path and let the failure surface much deeper -- as
+            // ERROR_INVALID_DRIVE, reported to the user as "the drive cannot hold a
+            // separate Roboc recycle bin". That blames the user's device for a
+            // limitation of this program.
+            string? notFileSystem = ExplainNonFileSystemPath(path);
+
+            if (notFileSystem is not null)
+            {
+                failed++;
+                Console.Error.WriteLine(Lang.Pick($"roboc: 无法回收 {path}：{notFileSystem}", $"roboc: cannot recycle {path}: {notFileSystem}"));
+                continue;
+            }
+
             string extended = PathUtil.ToExtended(path);
 
             if (RecycleBin.TryPut(extended, out string stored, out int error))
@@ -281,6 +295,14 @@ internal static class MaintenanceCommands
 
         foreach (string path in paths)
         {
+            string? notFileSystem = ExplainNonFileSystemPath(path);
+
+            if (notFileSystem is not null)
+            {
+                failures.Add($"{path}\r\n    {notFileSystem}");
+                continue;
+            }
+
             if (RecycleBin.TryPut(PathUtil.ToExtended(path), out _, out int error))
             {
                 moved++;
@@ -308,7 +330,43 @@ internal static class MaintenanceCommands
         return 3;
     }
 
-    /// <summary>回收空间 — report or reclaim what the bins are holding.</summary>
+    /// <summary>
+    /// Explains, when it applies, that this path is not an item in the file system.
+    ///
+    /// Returns null for anything the file APIs can be asked about.
+    ///
+    /// <b>Why every destructive verb needs this.</b> A shell namespace item -- a phone
+    /// over MTP, a library, a search result, the contents of an archive -- exposes a
+    /// <c>Path</c> property and that property is a string, so it arrives through the
+    /// context menu looking exactly like a file. It is not one:
+    ///
+    /// <code>
+    /// ::{20D04FE0-...}\\\?\usb#vid_22d9&amp;pid_2765&amp;mi_00#7&amp;...#{6ac27878-...}\SID-{10001,,493075931136}\...
+    /// </code>
+    ///
+    /// Failures downstream of that are misleading rather than merely unhelpful: the
+    /// copy engine said <c>source not found</c> and printed the identifier, and the
+    /// recycle verb said the drive cannot hold a bin. Both read as faults of the user's
+    /// device. <b>The honest answer is that this program cannot read it.</b>
+    ///
+    /// One wording, shared by the verbs, so that the three of them cannot drift apart.
+    /// </summary>
+    private static string? ExplainNonFileSystemPath(string path)
+    {
+        if (PathUtil.LooksLikeFileSystemPath(path))
+        {
+            return null;
+        }
+
+        return Lang.Pick(
+            "这不是文件系统里的内容 —— 它看起来在便携设备（手机、相机等以 MTP 连接）、库、搜索结果或压缩包里，" +
+            "这些由资源管理器用 shell 命名空间表示，本工具无法读取。请先用资源管理器复制到本地磁盘，再处理那份副本。",
+            "this is not an item in the file system -- it appears to be inside a portable device " +
+            "(a phone or camera connected over MTP), a library, a search result or an archive. Explorer " +
+            "represents those through the shell namespace, which this tool cannot read. Copy it to a " +
+            "local disk with Explorer first, then work on that copy.");
+    }
+
     /// <summary>
     /// Puts recycled items back where they came from.
     ///
@@ -589,6 +647,7 @@ internal static class MaintenanceCommands
         return failures.Count == 0 ? 0 : 3;
     }
 
+    /// <summary>回收空间 — report or reclaim what the bins are holding.</summary>
     public static int Reclaim(Args args)
     {
         // Explorer invokes a verb once per selected item even when the command takes
@@ -610,21 +669,21 @@ internal static class MaintenanceCommands
 
         if (roots.Count == 0)
         {
-              // Reported only. Opening a drive window was an unasked-for side effect:
-              // the user asked a question about the bin and got a file browser.
-              if (args.Flag("--gui-errors"))
-              {
-                  ShowDialog(
-                      Lang.Pick("♻️回收站是空的，没有可回收的内容。", "♻️The recycle bin is empty."),
-                      Lang.Pick("Roboc 回收站", "Roboc — Recycle bin"),
-                      warning: false,
-                      centre: true);
+            // Reported only. Opening a drive window was an unasked-for side effect:
+            // the user asked a question about the bin and got a file browser.
+            if (args.Flag("--gui-errors"))
+            {
+                ShowDialog(
+                    Lang.Pick("♻️回收站是空的，没有可回收的内容。", "♻️The recycle bin is empty."),
+                    Lang.Pick("Roboc 回收站", "Roboc — Recycle bin"),
+                    warning: false,
+                    centre: true);
 
-                  return 0;
-              }
+                return 0;
+            }
 
-              Console.WriteLine(Lang.Pick("♻️回收空间是空的，没有可回收的内容。", "♻️The recycle bin is empty."));
-              return 0;
+            Console.WriteLine(Lang.Pick("♻️回收空间是空的，没有可回收的内容。", "♻️The recycle bin is empty."));
+            return 0;
         }
 
         var items = new List<(string Root, RecycleBin.Item Item)>();
@@ -1475,9 +1534,9 @@ internal static class MaintenanceCommands
             Lang.Pick("该位置的路径无法映射到回收站中（例如网络路径）", "the path cannot be mapped into the bin (a network path, for instance)"),
         NativeConst.ERROR_INVALID_PARAMETER =>
             Lang.Pick("该项目已经在回收站里了，不能重复回收", "this item is already in the bin and cannot be recycled twice"),
-            NativeConst.ERROR_ALREADY_EXISTS =>
-                Lang.Pick("回收站中这个位置已经有一份了。请先把回收站里的那一份处理掉，", "The bin already holds something from that location. Deal with that copy first,") +
-                Lang.Pick("否则无法判断该恢复哪一份。", "or there is no way to tell which one to restore."),
+        NativeConst.ERROR_ALREADY_EXISTS =>
+            Lang.Pick("回收站中这个位置已经有一份了。请先把回收站里的那一份处理掉，", "The bin already holds something from that location. Deal with that copy first,") +
+            Lang.Pick("否则无法判断该恢复哪一份。", "or there is no way to tell which one to restore."),
         5 => Lang.Pick("拒绝访问：无法在所在驱动器建立回收站", "access denied: the recycle bin could not be created on that drive"),
         32 => Lang.Pick("文件正被其他程序占用", "the file is in use by another program"),
         _ => Lang.Pick($"错误码 {error}", $"error {error}"),

@@ -99,112 +99,137 @@ internal static class CopyCommand
         // should not interrupt anything.
         bool fromMenu = args.Flag("--gui-errors");
 
-        using ProgressWindow? progressWindow = fromMenu
+        JobResult result;
+
+        // The progress window lives only as long as the operation does, and the finally
+        // below is what enforces that. It must not outlive it: a modal dialog runs its own
+        // message loop on this thread, and while it does, no message reaches the progress
+        // window -- so 取消 and 关闭 are painted but dead, and the window can only be
+        // dismissed through the dialog.
+        //
+        // Reported by the user on 2026-10-15 with a screenshot: a paste the guard refused
+        // left the progress window and the error dialog on screen together.
+        //
+        // Note the explicit Dispose in a finally, rather than a using declaration.
+        // A using *declaration* is disposed at the end of its enclosing block, and the
+        // dialog on the failure path is shown inside that block -- so the dialog appeared
+        // first and the window was still on screen. A finally runs before the catch that
+        // follows it, which is exactly the order needed.
+        ProgressWindow? progressWindow = fromMenu
             ? ProgressWindow.Start(Lang.Pick("正在复制", "Copying"), destination, control)
             : null;
 
-        Action<ProgressSnapshot>? onProgress = quiet ? null : new ConsoleProgress().Report;
-
-        if (progressWindow is not null)
-        {
-            Action<ProgressSnapshot>? console = quiet ? null : onProgress;
-
-            onProgress = snapshot =>
-            {
-                console?.Invoke(snapshot);
-
-                long remaining = snapshot.HasTotals
-                    ? Math.Max(0, snapshot.FilesTotal - snapshot.FilesDone)
-                    : 0;
-
-                progressWindow.Report(
-                    BuildHeadline(snapshot, move, destination),
-                    snapshot.CurrentItem is { Length: > 0 } item ? Shorten(item) : Lang.Pick("正在准备…", "Preparing..."),
-                    remaining,
-                    Math.Max(0, snapshot.BytesTotal - snapshot.BytesDone),
-                    (long)snapshot.BytesPerSecond,
-                    Fraction(snapshot),
-                    snapshot.Remaining?.TotalSeconds);
-            };
-        }
-
-        var job = new CopyJob
-        {
-            Sources = sources,
-            Destination = destination,
-            Options = options,
-            Control = control,
-            Journal = journal,
-            Progress = progress,
-            Move = move,
-            Stream = args.Flag("--stream"),
-            Timings = timings,
-            OnLog = quiet ? null : message => Console.Error.WriteLine("  ! " + message),
-            OnProgress = onProgress,
-            OnItemWritten = changedRoots is null
-                ? null
-                : relative =>
-                {
-                    int separator = relative.IndexOf('\\');
-
-                    // A file at the top level is its own root; anything deeper
-                    // belongs to the folder that contains it.
-                    string root = separator < 0 ? relative : relative[..separator];
-
-                    if (root.Length > 0)
-                    {
-                        lock (changedRoots)
-                        {
-                            changedRoots.Add(root);
-                        }
-                    }
-                },
-        };
-
-        JobResult result;
         try
         {
-            result = CopyEngine.Run(job);
-        }
-        catch (OperationCanceledException)
-        {
-            Console.Error.WriteLine("cancelled");
-            return 130;
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"roboc: {ex.Message}");
+            Action<ProgressSnapshot>? onProgress = quiet ? null : new ConsoleProgress().Report;
 
-            // Told to the user as well, when there is a user to tell.
-            //
-            // This is where every guard refusal lands -- a destination inside its own source, a
-            // folder into itself -- and it used to write to stderr and return. Invoked from the
-            // context menu there is no console, so a refused paste said nothing anywhere: not a
-            // message the user could act on, not even an indication that the program had run.
-            // Reported as "paste does nothing".
-            //
-            // The text is the guard's own, and it names both paths involved -- which is what
-            // makes it actionable rather than merely informative.
-            if (args.Flag("--gui-errors"))
+            if (progressWindow is not null)
             {
-                MaintenanceCommands.ReportProblemPublic(true, ex.Message);
+                Action<ProgressSnapshot>? console = quiet ? null : onProgress;
+
+                onProgress = snapshot =>
+                {
+                    console?.Invoke(snapshot);
+
+                    long remaining = snapshot.HasTotals
+                        ? Math.Max(0, snapshot.FilesTotal - snapshot.FilesDone)
+                        : 0;
+
+                    progressWindow.Report(
+                        BuildHeadline(snapshot, move, destination),
+                        snapshot.CurrentItem is { Length: > 0 } item ? Shorten(item) : Lang.Pick("正在准备…", "Preparing..."),
+                        remaining,
+                        Math.Max(0, snapshot.BytesTotal - snapshot.BytesDone),
+                        (long)snapshot.BytesPerSecond,
+                        Fraction(snapshot),
+                        snapshot.Remaining?.TotalSeconds);
+                };
             }
 
-            return 1;
-        }
+            var job = new CopyJob
+            {
+                Sources = sources,
+                Destination = destination,
+                Options = options,
+                Control = control,
+                Journal = journal,
+                Progress = progress,
+                Move = move,
+                Stream = args.Flag("--stream"),
+                Timings = timings,
+                OnLog = quiet ? null : message => Console.Error.WriteLine("  ! " + message),
+                OnProgress = onProgress,
+                OnItemWritten = changedRoots is null
+                    ? null
+                    : relative =>
+                    {
+                        int separator = relative.IndexOf('\\');
 
-        if (!quiet)
-        {
-            ConsoleProgress.Finish();
-            PrintSummary(result, options);
-        }
+                        // A file at the top level is its own root; anything deeper
+                        // belongs to the folder that contains it.
+                        string root = separator < 0 ? relative : relative[..separator];
 
-        // Invoked from a menu there is no console, so the summary and every error
-        // would be written into nothing. That is how a paste whose sources no longer
-        // existed came to look like it had done nothing at all.
-        if (args.Flag("--gui-errors"))
+                        if (root.Length > 0)
+                        {
+                            lock (changedRoots)
+                            {
+                                changedRoots.Add(root);
+                            }
+                        }
+                    },
+            };
+
+            try
+            {
+                result = CopyEngine.Run(job);
+            }
+            catch (OperationCanceledException)
+            {
+                Console.Error.WriteLine("cancelled");
+                return 130;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"roboc: {ex.Message}");
+
+                // Told to the user as well, when there is a user to tell.
+                //
+                // This is where every guard refusal lands -- a destination inside its own source, a
+                // folder into itself -- and it used to write to stderr and return. Invoked from the
+                // context menu there is no console, so a refused paste said nothing anywhere: not a
+                // message the user could act on, not even an indication that the program had run.
+                // Reported as "paste does nothing".
+                //
+                // The text is the guard's own, and it names both paths involved -- which is what
+                // makes it actionable rather than merely informative.
+                if (args.Flag("--gui-errors"))
+                {
+                    MaintenanceCommands.ReportProblemPublic(true, ex.Message);
+                }
+
+                return 1;
+            }
+
+            if (!quiet)
+            {
+                ConsoleProgress.Finish();
+                PrintSummary(result, options);
+            }
+
+            // Invoked from a menu there is no console, so the summary and every error
+            // would be written into nothing. That is how a paste whose sources no longer
+            // existed came to look like it had done nothing at all.
+            if (args.Flag("--gui-errors"))
+            {
+                ReportToDialog(result, options);
+            }
+        }
+        finally
         {
-            ReportToDialog(result, options);
+            // Before any dialog, on every path out of here -- including the two returns
+            // in the catches above, because a finally runs before the catch that is
+            // returning.
+            progressWindow?.Dispose();
         }
 
         // A clean run has nothing left to resume, and keeping the log would make

@@ -134,25 +134,42 @@ internal static class DeleteCommand
         // shows anything, and a long one reports what is left and how long.
         bool fromMenu = args.Flag("--gui-errors");
 
-        using ProgressWindow? progressWindow = fromMenu
+        JobResult result;
+
+        // The progress window lives only as long as the operation does, and the finally
+        // below is what enforces that. It must not outlive it: a modal dialog runs its own
+        // message loop on this thread, and while it does, no message reaches the progress
+        // window -- so 取消 and 关闭 are painted but dead, and the window can only be
+        // dismissed through the dialog.
+        //
+        // Reported by the user on 2026-10-15 with a screenshot: a refused delete left the
+        // progress window and the error dialog on screen together. The copy path had the
+        // same shape.
+        //
+        // Note the explicit Dispose in a finally, rather than a using declaration.
+        // A using *declaration* is disposed at the end of its enclosing block, and the
+        // dialog on the failure path is shown inside that block -- so the dialog appeared
+        // first and the window was still on screen. Measured, not assumed: both were
+        // visible in the same sample. Disposing before anything else is what fixes it.
+        ProgressWindow? progressWindow = fromMenu
             ? ProgressWindow.Start(Lang.Pick("正在删除", "Deleting"), Lang.Pick("文件不会进入任何回收站", "Files do not go to any recycle bin"), control)
             : null;
-        var progress = new ProgressAggregator();
 
-        var job = new DeleteJob
-        {
-            Sources = sources,
-            Options = options,
-            Control = control,
-            Progress = progress,
-            Stream = args.Flag("--stream"),
-            OnLog = quiet ? null : message => Console.Error.WriteLine("  ! " + message),
-            OnProgress = BuildProgressCallback(quiet, progressWindow),
-        };
-
-        JobResult result;
         try
         {
+            var progress = new ProgressAggregator();
+
+            var job = new DeleteJob
+            {
+                Sources = sources,
+                Options = options,
+                Control = control,
+                Progress = progress,
+                Stream = args.Flag("--stream"),
+                OnLog = quiet ? null : message => Console.Error.WriteLine("  ! " + message),
+                OnProgress = BuildProgressCallback(quiet, progressWindow),
+            };
+
             result = DeleteEngine.Run(job);
         }
         catch (OperationCanceledException)
@@ -179,6 +196,12 @@ internal static class DeleteCommand
             }
 
             return 4;
+        }
+        finally
+        {
+            // Before any dialog, on every path out of here -- including the two returns
+            // above, because a finally runs before the catch that is returning.
+            progressWindow?.Dispose();
         }
 
         if (!quiet)

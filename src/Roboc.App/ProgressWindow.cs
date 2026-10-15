@@ -26,7 +26,7 @@ internal sealed class ProgressWindow : IDisposable
 {
     private const int DelayMs = 2000;
     private const uint TimerId = 1;
-        /// <summary>
+    /// <summary>
     /// 100 ms, not 200.
     ///
     /// This is the horizontal resolution of the rate graph: sixty samples spread over
@@ -217,9 +217,9 @@ internal sealed class ProgressWindow : IDisposable
             lpszClassName = "RobocProgress",
             hInstance = GetModuleHandleW(null),
             // Set, not left at zero: a class registered without an icon gives a window
-                // without one, which is why the title bars were blank.
-                hIcon = AppIcon.Handle,
-                hCursor = LoadCursorW(0, 32512),   // IDC_ARROW
+            // without one, which is why the title bars were blank.
+            hIcon = AppIcon.Handle,
+            hCursor = LoadCursorW(0, 32512),   // IDC_ARROW
         };
 
         RegisterClassW(ref wc);
@@ -592,7 +592,7 @@ internal sealed class ProgressWindow : IDisposable
 
         if (ButtonFont == 0)
         {
-    
+
         }
 
         MessageDialog.DrawButtonCore(
@@ -657,7 +657,7 @@ internal sealed class ProgressWindow : IDisposable
         //  166  graph
         //  320  three detail lines, 30 px apart    -> 320..380
         // The window is 480 logical pixels tall, so the last line clears the bottom.
-                // Vertical rhythm, in logical pixels at 96 DPI. Every band is stated once,
+        // Vertical rhythm, in logical pixels at 96 DPI. Every band is stated once,
         // here and nowhere else.
         //
         // The previous set was carried over unchanged when the card was made 15%
@@ -1128,16 +1128,19 @@ internal sealed class ProgressWindow : IDisposable
     [DllImport("gdi32.dll")] private static extern nint SelectObject(nint dc, nint obj);
     [DllImport("gdi32.dll")] private static extern int DeleteDC(nint dc);
     [DllImport("gdi32.dll")] private static extern int DeleteObject(nint obj);
-    [DllImport("gdi32.dll")] private static extern int BitBlt(
+    [DllImport("gdi32.dll")]
+    private static extern int BitBlt(
         nint dest, int x, int y, int width, int height, nint source, int sx, int sy, uint rop);
     [DllImport("user32.dll")] private static extern int FillRect(nint dc, ref RECT rect, nint brush);
     [DllImport("gdi32.dll")] private static extern int Polygon(nint dc, POINT[] points, int count);
     [DllImport("gdi32.dll")] private static extern int Polyline(nint dc, POINT[] points, int count);
     [DllImport("gdi32.dll")] private static extern int SetBkMode(nint dc, int mode);
     [DllImport("gdi32.dll")] private static extern uint SetTextColor(nint dc, uint color);
-    [DllImport("gdi32.dll", CharSet = CharSet.Unicode)] private static extern int TextOutW(
+    [DllImport("gdi32.dll", CharSet = CharSet.Unicode)]
+    private static extern int TextOutW(
         nint dc, int x, int y, string text, int length);
-    [DllImport("gdi32.dll", CharSet = CharSet.Unicode)] private static extern nint CreateFontW(
+    [DllImport("gdi32.dll", CharSet = CharSet.Unicode)]
+    private static extern nint CreateFontW(
         int height, int width, int escapement, int orientation, int weight,
         uint italic, uint underline, uint strikeOut, uint charSet,
         uint outputPrecision, uint clipPrecision, uint quality, uint pitchAndFamily,
@@ -1169,7 +1172,8 @@ internal sealed class ProgressWindow : IDisposable
     private static extern int AdjustWindowRectExForDpi(
         ref RECT rect, uint style, int menu, uint extendedStyle, uint dpi);
 
-    [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(
         nint hwnd, int attribute, ref int value, int size);
 
     [DllImport("gdi32.dll")] private static extern nint CreateSolidBrush(uint color);

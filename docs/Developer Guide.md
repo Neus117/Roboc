@@ -278,6 +278,80 @@ other six" problem in one edit.
 
 ---
 
+## Why it cannot read portable devices (phones, cameras — MTP)
+
+**Conclusion: it does not read them. This is not a defect waiting to be fixed; it is a decision
+that follows from the architecture.**
+
+### A device item is not a file
+
+A phone connected over MTP **has no drive letter** — it is not a file system but an item in the
+shell namespace. Its `Path` property is a string, so it travels all the way to the file APIs
+looking like a path:
+
+```
+::{20D04FE0-3AEA-1069-A2D8-08002B30309D}\\\?\usb#vid_22d9&pid_2765&mi_00#7&18246318&1&0000#{6ac27878-...}\SID-{10001,,493075931136}\{6AD0215E-...}\{6AD02111-...}
+```
+
+**Measured 2026-10-15** (device: OnePlus Ace 5 Pro):
+
+| Check | Result |
+|---|---|
+| What the clipboard holds after copying from the device | **`CF_HDROP` only** — no `CFSTR_SHELLIDLIST` |
+| `SHParseDisplayName(that string)` | **`0x80070057 (E_INVALIDARG)`** |
+| Path spellings tried | as-is / without the `::{20D04FE0}` prefix / with `shell:::` / device instance alone / with the SID segment / joined with `#` — **all six unresolvable** |
+| Control: `C:\Windows\notepad.exe` | `S_OK` |
+| Control: `::{20D04FE0-...}` (the This PC CLSID) | `S_OK` |
+| `GetFileAttributesW(that string)` | `0xFFFFFFFF` — **this is where the program used to die** |
+
+**The shell can navigate *into* the device** (`NameSpace` returns the device item, `IsFolder` is
+true), **but a device item's `Path` is one-way** — no prefix turns it back into a PIDL.
+
+### Why it is not done
+
+**1. The only workable route has nothing to do with the existing engine.** The documented way to
+read device content is the **WPD API** (`IPortableDevice` → `IPortableDeviceContent` →
+`IPortableDeviceResources::GetStream` → `IStream` → a sequential `StreamCopy`). It is
+**streaming**:
+
+| What this project is good at | On MTP |
+|---|---|
+| Multi-threaded worker pool | ✗ the stream is serial |
+| Overlapped I/O (`OVERLAPPED`) | ✗ |
+| Block cloning / hard-link reconstruction | ✗ meaningless |
+| The resume journal | ✗ would have to be written from scratch |
+
+**Even if built, it would be a separate code path that gets none of the optimisations this tool
+exists for.**
+
+**2. It does not serve the reason this tool exists.** Roboc solves "Explorer is slow with very
+large numbers of small files"; its advantage comes from cutting **per-file overhead**. MTP's
+bottleneck is the device, not per-file overhead. **On that route the premise — faster than
+Explorer — does not hold.**
+
+**3. There is already a better answer.** Copy the device's contents to a local disk with Explorer
+first, then run this tool on the local copy. That is the case it is built for.
+
+### What was done instead: say it plainly, do not fail silently
+
+Three behaviours used to mislead the user:
+
+| Verb | Before | Now |
+|---|---|---|
+| Paste | `source not found:` followed by a device identifier — English, internal | A plain explanation plus "copy it to a local disk with Explorer first" |
+| Recycle | **"the drive cannot hold a separate Roboc recycle bin"** — this program's limitation reported as a fault of the user's device | The same plain explanation |
+| Delete | **silently skipped**, then "none of the given items exist" — implying the files had already been deleted | The same plain explanation, no longer silent |
+
+**The test is `PathUtil.LooksLikeFileSystemPath`**: only a path with a drive letter or a UNC
+prefix is a file-system path. It does not test existence and is not a general parse of the shell
+grammar — it answers only the question the caller actually has: **could a Win32 file API mean
+anything by this string?**
+
+**This is a design principle**: where a tool cannot do something, saying so beats doing half of
+it — and **reporting your own limitation as the other side's fault is the worst version of all.**
+
+---
+
 # 5. Defects that have been fixed
 
 **These are grouped by the shape of the mistake, because the shape is what recurs.** Note that
@@ -345,7 +419,7 @@ filesystem refusing, and actually means "there is no such control code".
 **This defect had been present since the project began, and had been written off as "this
 machine does not support it".**
 
-## E. "Only half of it was changed" (4)
+## E. "Only half of it was changed" (5)
 
 **When one problem has several paths or several layers, fixing one of them feels like fixing
 it.**
@@ -355,6 +429,7 @@ it.**
 | **The Mica material** | The window background's Mica was removed | **The title bar is drawn by DWM and kept its Mica** — so the bar followed the wallpaper while the body stayed neutral grey |
 | **Menu icons** | `WriteFlat` called `IconFor` correctly | **`WriteCascade` — the default layout — hard-coded `quotedExe + ",0"`**, so six entries showed one icon |
 | **Settings persistence** | Both `Load()` and `Save()` were written | **`Save` still used the reflection overload**, which must throw in a trimmed build |
+| **The progress window and a dialog together** | The progress window was disposed, so it looked handled | **Both verbs disposed it at the end of the block, and the dialog on the failure path is shown *inside* that block** — so the modal dialog appeared first. A modal dialog runs its own message loop, so 取消 and 关闭 were painted but dead: the progress window could only be dismissed through the dialog. A `using` declaration is disposed at the end of its scope; a `finally` runs before the `catch` that follows it, which is the order actually needed. **Reported by the user on 2026-10-15 with a screenshot** |
 | **The "reveal" after a paste** | `SHOpenFolderAndSelectItems` called on its own did reuse the window | **Called by the program, it does not** — an already-open destination still gets a new window beside it. The criterion used was "the API works on its own", not "what the user sees" (section 17) |
 
 **The Mica case is the clearest.** The comment written when Mica was first removed says:
@@ -922,6 +997,7 @@ point.**
 | **`--verify`** | Implemented (byte-for-byte comparison), off by default |
 | **Hard-link reconstruction** | Implemented, on by default; the mapping is capped at one million entries |
 | **Reparse points** | Implemented and verified |
+| **Portable devices (MTP — phones, cameras)** | **Not supported, and not planned** — see section 4. A device item is represented by the shell namespace and cannot be opened by the file APIs; the only workable route is the WPD streaming API, which gets none of this tool's optimisations. **It now explains this in plain language instead of printing an internal path, and no longer claims the drive is at fault** |
 | **Dialog 4 is unreachable** | Undecided: delete it, add a menu entry, or keep it |
 | A comment stating the empty-catch convention | **Not done** — the rule is in section 7 |
 | `Rounds=2` in Quick mode is not statistically meaningful | Known; full mode uses 5 |

@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 
 namespace Roboc.Core.Fs;
 
@@ -21,6 +21,52 @@ internal static class PathUtil
     public static bool IsExtended(string path) => path.StartsWith(ExtendedPrefix, StringComparison.Ordinal);
     public static bool IsDevicePath(string path) => path.StartsWith(DevicePrefix, StringComparison.Ordinal);
     public static bool IsUnc(string path) => path.StartsWith(@"\\", StringComparison.Ordinal) && !IsExtended(path);
+
+    /// <summary>
+    /// Whether this is a path the Win32 file APIs can be asked about at all.
+    ///
+    /// <b>Why this exists.</b> Shell namespace items -- a portable device over MTP, a
+    /// library, a search result, a zip's contents -- have a <c>Path</c> property, and it
+    /// is a string, so it arrives here looking like a path. It is not one. A device item
+    /// reads:
+    ///
+    /// <code>
+    /// ::{20D04FE0-...}\\\?\usb#vid_22d9&amp;pid_2765&amp;mi_00#7&amp;...#{6ac27878-...}\SID-{10001,,493075931136}\{6AD0215E-...}
+    /// </code>
+    ///
+    /// Nothing that reaches a file API can resolve that. <c>Path.GetFullPath</c> does not
+    /// reject it -- it treats it as a relative path and produces something that is
+    /// silently wrong -- and then <c>GetFileAttributes</c> fails, so the caller reports
+    /// "source not found" and shows the user a device identifier instead of an
+    /// explanation.
+    ///
+    /// <b>What is deliberately not claimed.</b> This does not test whether the path
+    /// exists, and it is not a general parse of the shell grammar. It only answers the
+    /// question the callers actually have: could a Win32 file API mean anything by this
+    /// string? A rooted path with a drive letter or a UNC prefix can; everything else
+    /// cannot, and saying so plainly is the whole point.
+    /// </summary>
+    public static bool LooksLikeFileSystemPath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return false;
+        }
+
+        string trimmed = path.Trim();
+
+        // A drive-qualified path: "C:\..." or "C:/..." or a bare "C:".
+        if (trimmed.Length >= 2 &&
+            char.IsAsciiLetter(trimmed[0]) &&
+            trimmed[1] == ':' &&
+            (trimmed.Length == 2 || trimmed[2] == '\\' || trimmed[2] == '/'))
+        {
+            return true;
+        }
+
+        // A UNC path, including the \\?\ and \\.\ forms.
+        return trimmed.StartsWith(@"\\", StringComparison.Ordinal);
+    }
 
     public static bool IsUncExtended(string path) =>
         path.StartsWith(ExtendedUncPrefix, StringComparison.OrdinalIgnoreCase);

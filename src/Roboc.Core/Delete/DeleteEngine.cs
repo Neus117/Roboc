@@ -98,6 +98,25 @@ public static class DeleteEngine
             // current directory happens to be.
             GuardDriveRelative(raw);
 
+            // A shell namespace item -- a phone over MTP, a library, a search result --
+            // is not a file, and the file APIs cannot be asked about it. Without this the
+            // item was silently dropped from the list, and the caller then said "none of
+            // the given items exist; they may already have been deleted or moved" --
+            // which is a plausible and completely wrong explanation.
+            if (!PathUtil.LooksLikeFileSystemPath(raw))
+            {
+                throw new NotSupportedException(Lang.Pick(
+                    $"⚠️这个项目不是文件系统里的内容，本工具读不了：\r\n\r\n{raw}\r\n\r\n" +
+                    "它看起来在便携设备（手机、相机等以 MTP 连接）、库、搜索结果或压缩包里 —— " +
+                    "这些由资源管理器用 shell 命名空间表示，程序无法用文件 API 打开。\r\n\r\n" +
+                    "请先用资源管理器把它复制到本地磁盘，再用本工具处理。",
+                    $"⚠️This item is not in the file system, so this tool cannot read it:\r\n\r\n{raw}\r\n\r\n" +
+                    "It appears to be inside a portable device (a phone or camera connected over MTP), " +
+                    "a library, a search result or an archive -- all of which Explorer represents " +
+                    "through the shell namespace, which file APIs cannot open.\r\n\r\n" +
+                    "Copy it to a local disk with Explorer first, then use this tool on that copy."));
+            }
+
             string extended = PathUtil.TrimTrailingSeparator(PathUtil.ToExtended(raw));
 
             GuardAgainstVolumeRoot(extended, raw);
