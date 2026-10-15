@@ -231,12 +231,12 @@ internal static class DeleteCommand
     }
 
     /// <summary>
-    /// Refuses, before the progress window is started, when a source is not an item in the
-    /// file system. Returns true when every source is usable.
+    /// Refuses, before the progress window is started, when the item is not in the file
+    /// system. Returns true when it is usable.
     ///
     /// The message is deliberately short and does not print the namespace path: that path
     /// is a device identifier, it means nothing to a user, and it was long enough that the
-    /// dialog had to cut it off. The device name is what identifies the place.
+    /// dialog had to cut it off. The device's name is what identifies the place.
     /// </summary>
     private static bool RejectNonFileSystemSources(IReadOnlyList<string> sources, bool fromMenu)
     {
@@ -248,10 +248,10 @@ internal static class DeleteCommand
             }
 
             string message = Lang.Pick(
-                "这个项目不是文件系统里的内容，本工具读不了。\r\n\r\n" +
+                "⚠️这个项目不是文件系统里的内容，本工具读不了。\r\n\r\n" +
                 "它看起来在便携设备（手机、相机等以 MTP 连接）、库、搜索结果或压缩包里。\r\n\r\n" +
                 "请先用资源管理器把它复制到本地磁盘，再用本工具处理。",
-                "This item is not in the file system, so this tool cannot read it.\r\n\r\n" +
+                "⚠️This item is not in the file system, so this tool cannot read it.\r\n\r\n" +
                 "It appears to be inside a portable device (a phone or camera connected over MTP), " +
                 "a library, a search result or an archive.\r\n\r\n" +
                 "Copy it to a local disk with Explorer first, then use this tool on that copy.");
@@ -271,7 +271,8 @@ internal static class DeleteCommand
         return true;
     }
 
-    private static bool ConfirmInteractively(List<string> sources)    {
+    private static bool ConfirmInteractively(List<string> sources)
+    {
         if (!ConsoleHost.HasConsole)
         {
             return false;

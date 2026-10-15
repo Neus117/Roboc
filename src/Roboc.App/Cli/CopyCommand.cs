@@ -85,9 +85,15 @@ internal static class CopyCommand
         // progress window appears *behind* the dialog, with 取消 and 关闭 that never
         // receive a message and cannot be clicked.
         //
-        // Reported by the user on 2026-10-15, twice, with screenshots. Rejecting the source
-        // here means the window has not been started at all, which is the only clean fix.
-        if (!RejectNonFileSystemSources(sources, args.Flag("--gui-errors")))
+        // Reported by the user on 2026-10-15, twice, with screenshots. Rejecting here means
+        // the window has not been started at all, which is the only clean fix.
+        //
+        // Both ends are checked, and the destination matters as much as the sources:
+        // pasting *to* a phone passes the device's own path as the target, and without this
+        // the run got as far as CreateDirectory, which reported
+        // "CreateDirectory failed for 8&1&0000#{6ac27878-...}: the system cannot find the
+        // path specified" -- the same fault, reported in the same internal language.
+        if (!RejectNonFileSystemPaths(sources, destination, args.Flag("--gui-errors")))
         {
             return 4;
         }
@@ -336,52 +342,69 @@ internal static class CopyCommand
     }
 
     /// <summary>
-    /// Refuses, before anything is created, when a source is not an item in the file
-    /// system. Returns true when every source is usable.
+    /// Refuses, before anything is created, when either end of the operation is not an
+    /// item in the file system. Returns true when both ends are usable.
     ///
     /// <b>Why here and not only in the engine.</b> The engine's guard fires after the
     /// progress window has been started, and its thread is still inside the show delay at
     /// that moment. The error dialog then opens first, and because a modal dialog runs its
     /// own message loop, it pumps the pending creation message for the progress window:
     /// a blank window appears behind the dialog with 取消 and 关闭 that can never be
-    /// clicked. Rejecting the source before the window exists removes the possibility
-    /// rather than trying to sequence around it.
+    /// clicked. Rejecting before the window exists removes the possibility rather than
+    /// trying to sequence around it.
     ///
-    /// The message deliberately does not print the raw namespace path any more. It is a
-    /// device identifier that means nothing to a user, it is long enough that the dialog
-    /// had to cut it off, and the device name is what identifies the place anyway.
+    /// <b>Both directions.</b> A device path can arrive as the source (pasting *from* a
+    /// phone) or as the destination (pasting *to* one). Only the source was checked at
+    /// first, and the destination then failed much deeper, with
+    /// <c>CreateDirectory failed for 8&amp;1&amp;0000#{6ac27878-...}</c> -- which names
+    /// neither the problem nor what to do about it.
+    ///
+    /// The message deliberately does not print the raw namespace path: it is a device
+    /// identifier that means nothing to a user, it is long enough that the dialog had to
+    /// cut it off, and the device's name is what identifies the place anyway.
     /// </summary>
-    private static bool RejectNonFileSystemSources(IReadOnlyList<string> sources, bool fromMenu)
+    private static bool RejectNonFileSystemPaths(
+        IReadOnlyList<string> sources, string destination, bool fromMenu)
     {
         foreach (string source in sources)
         {
-            if (PathUtil.LooksLikeFileSystemPath(source))
+            if (!PathUtil.LooksLikeFileSystemPath(source))
             {
-                continue;
+                ReportNotFileSystem(fromMenu);
+                return false;
             }
+        }
 
-            string message = Lang.Pick(
-                "这个来源不是文件系统里的内容，本工具读不了。\r\n\r\n" +
-                "它看起来在便携设备（手机、相机等以 MTP 连接）、库、搜索结果或压缩包里。\r\n\r\n" +
-                "请先用资源管理器把它复制到本地磁盘，再用本工具处理。",
-                "This source is not an item in the file system, so this tool cannot read it.\r\n\r\n" +
-                "It appears to be inside a portable device (a phone or camera connected over MTP), " +
-                "a library, a search result or an archive.\r\n\r\n" +
-                "Copy it to a local disk with Explorer first, then use this tool on that copy.");
-
-            if (fromMenu)
-            {
-                MaintenanceCommands.ReportProblemPublic(true, message);
-            }
-            else
-            {
-                Console.Error.WriteLine("roboc: " + message.Replace("\r\n\r\n", " "));
-            }
-
+        if (!PathUtil.LooksLikeFileSystemPath(destination))
+        {
+            ReportNotFileSystem(fromMenu);
             return false;
         }
 
         return true;
+    }
+
+    /// <summary>Shows the shared explanation. One wording for every entry point, so the
+    /// verbs cannot drift apart.</summary>
+    private static void ReportNotFileSystem(bool fromMenu)
+    {
+        string message = Lang.Pick(
+            "⚠️这个位置不是文件系统里的内容，本工具读不了。\r\n\r\n" +
+            "它看起来在便携设备（手机、相机等以 MTP 连接）、库、搜索结果或压缩包里。\r\n\r\n" +
+            "请先用资源管理器把它复制到本地磁盘，再用本工具处理。",
+            "⚠️This location is not an item in the file system, so this tool cannot read it.\r\n\r\n" +
+            "It appears to be inside a portable device (a phone or camera connected over MTP), " +
+            "a library, a search result or an archive.\r\n\r\n" +
+            "Copy it to a local disk with Explorer first, then use this tool on that copy.");
+
+        if (fromMenu)
+        {
+            MaintenanceCommands.ReportProblemPublic(true, message);
+        }
+        else
+        {
+            Console.Error.WriteLine("roboc: " + message.Replace("\r\n\r\n", " "));
+        }
     }
 
     /// <summary>

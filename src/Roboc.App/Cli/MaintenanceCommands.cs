@@ -414,6 +414,18 @@ internal static class MaintenanceCommands
 
         foreach (string path in paths)
         {
+            // A bin path always is a file-system path, so this should not fire -- but every
+            // verb that reaches a file API gets the same refusal rather than only the ones
+            // that happened to be reported. Without it, the failure below reads "this item
+            // is not in the Roboc recycle bin", which is true and tells the user nothing.
+            string? notFileSystem = ExplainNonFileSystemPath(path);
+
+            if (notFileSystem is not null)
+            {
+                failures.Add(Lang.Pick($"读不了：{notFileSystem}", $"cannot read: {notFileSystem}"));
+                continue;
+            }
+
             string extended = PathUtil.ToExtended(path);
 
             string? binRoot = RecycleBin.RootFor(extended);
