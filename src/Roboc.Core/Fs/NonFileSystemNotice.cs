@@ -47,6 +47,12 @@ internal static class NonFileSystemNotice
     /// The explanation, in full. Callers decide how to show it -- a dialog from the menu,
     /// stderr from a terminal -- because that difference is theirs, not this text's.
     ///
+    /// <b>Two verbs, not one.</b> The sentence names both "moving files between an MTP
+    /// device and other storage" and "handling data on an MTP device". Reading, deleting and
+    /// recycling a device item are none of them a *transfer* between two places, so a
+    /// transfer-only wording left the delete scenario uncovered -- reported by the user on
+    /// 2026-10-15, who had tested paste in both directions and delete not at all.
+    ///
     /// The closing note is a parenthetical rather than a sentence, so it carries no full
     /// stop of its own. That is a deliberate deviation from the rest of the program's
     /// messages, which are standalone sentences -- settled by the user while reviewing the
@@ -57,16 +63,16 @@ internal static class NonFileSystemNotice
         "⚠️这个位置不在文件系统内。\r\n\r\n" +
         "便携设备（手机、相机等以 MTP 连接）、库、搜索结果、压缩包里的内容由资源管理器用 " +
         "shell 命名空间表示，没有文件系统路径。\r\n\r\n" +
-        "本工具无法在 MTP 设备与其它存储之间传送文件，请使用资源管理器。" +
+        "本工具无法在 MTP 设备与其它存储之间传送文件、处理 MTP 设备上的数据，请使用资源管理器。" +
         "（支持与否取决于路径能否表示成文件系统路径，与存储介质类型无关）",
 
         "⚠️This location is not in the file system.\r\n\r\n" +
         "Content inside a portable device (a phone or camera connected over MTP), a library, " +
         "a search result or an archive is represented by Explorer through the shell namespace " +
         "and has no file system path.\r\n\r\n" +
-        "This tool cannot move files between an MTP device and any other storage; use Explorer " +
-        "for that. (What matters is whether a location has a file system path, not what kind of " +
-        "storage it is.)");
+        "This tool cannot move files between an MTP device and other storage, nor work with " +
+        "data on an MTP device; use Explorer for that. (What matters is whether a location has " +
+        "a file system path, not what kind of storage it is.)");
 
     /// <summary>
     /// The same refusal for a failure list: the reason, short enough that ten of them do not

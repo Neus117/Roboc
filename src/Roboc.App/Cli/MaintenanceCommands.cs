@@ -857,19 +857,46 @@ internal static class MaintenanceCommands
         // Hand off to the ordinary delete path so this shares its guards, its
         // progress reporting and its error handling rather than growing a second
         // implementation of deletion.
-        // --gui-errors must be forwarded. Without it the delete path believes it was
-        // not invoked from a menu, so it creates no progress window and routes its
-        // failures nowhere -- the same omission that once left 粘贴 silent, made again
-        // in the neighbouring forwarder.
-        var forwarded = new string[4 + paths.Count];
-        forwarded[0] = "delete";
-        forwarded[1] = "--direct";
-        forwarded[2] = "--yes";
-        forwarded[3] = "--gui-errors";
+        //
+        // --gui-errors is forwarded only when this invocation itself came from a menu.
+        //
+        // It used to be forwarded unconditionally, on the reasoning that the delete path
+        // routes its failures nowhere without it -- which is true, and was the wrong cure.
+        // The flag does not mean "report failures"; it means "I was invoked from a menu", and
+        // three separate things read it that way: the progress window is created, the
+        // failure dialog is shown, and the item is taken to be a batch to be claimed through
+        // the shell. So a terminal invocation of 彻底删除 forced all three on: it opened the
+        // dialog, blocked on it with no one to click, and returned 4 with an empty stderr --
+        // a command-line user got a modal box and no text at all.
+        //
+        // Found on 2026-10-15 while covering every entry point against a device path: 回收
+        // and 取回 answered on stderr as expected, 彻底删除 hung. The same override is what
+        // made --gui-errors behave oddly in a terminal for this verb and no other.
+        // --quiet is forwarded for the same reason the user passed it: a terminal invocation
+        // that asked to be quiet should not start printing a progress line. It was simply
+        // never forwarded, so `purge --quiet` was not quiet. The menu path ignores it either
+        // way, since fromMenu branches off above to capture stderr into the dialog.
+        bool quiet = args.Flag("--quiet");
+
+        var forwarded = new string[3 + (fromMenu ? 1 : 0) + (quiet ? 1 : 0) + paths.Count];
+        int next = 0;
+        forwarded[next++] = "delete";
+        forwarded[next++] = "--direct";
+        forwarded[next++] = "--yes";
+
+        if (fromMenu)
+        {
+            forwarded[next++] = "--gui-errors";
+        }
+
+        if (quiet)
+        {
+            forwarded[next++] = "--quiet";
+        }
 
         for (int i = 0; i < paths.Count; i++)
         {
-            forwarded[4 + i] = paths[i];
+            forwarded[next + i] = paths[i];
         }
 
         // The delete engine reports failures through Console.Error, which goes
