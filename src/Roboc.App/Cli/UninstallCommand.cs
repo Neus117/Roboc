@@ -36,6 +36,21 @@ internal static class UninstallCommand
     /// </summary>
     public static int RunSettings(Args args)
     {
+        // Single instance, and only from the menu.
+        //
+        // The 设置 entry takes no selection, and Explorer still invokes a path-less
+        // verb once per selected item -- so selecting four files and choosing 设置
+        // opened four identical settings windows. Reported by the user on 2026-10-15,
+        // the same day and the same cause as the identical defect in 回收站.
+        //
+        // The claim is deliberately confined to the menu path: `roboc settings` typed
+        // in a terminal is one deliberate invocation, and making the second one exit
+        // silently would be worse than the bug being fixed.
+        if (args.Flag("--gui-errors") && !PendingSelection.TryClaimImmediate("settings"))
+        {
+            return 0;
+        }
+
         // Read before the window opens: the window applies a language change to the
         // running process as soon as it is clicked, so afterwards there is no way to tell
         // whether it changed.

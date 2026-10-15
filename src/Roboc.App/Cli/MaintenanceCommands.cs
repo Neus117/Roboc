@@ -664,10 +664,17 @@ internal static class MaintenanceCommands
         // Explorer invokes a verb once per selected item even when the command takes
         // no arguments. Batching normally handles that, but it only engages when
         // paths arrive, so 回收空间 -- which takes none -- ran once per file and
-        // produced a dialog and an Explorer window for each. The claim is what makes
-        // it single-shot; only the first invocation does anything.
-        if (args.Flag("--gui-errors") &&
-            !PendingSelection.TryClaim("reclaim", string.Empty, out _))
+        // produced a dialog and an Explorer window for each.
+        //
+        // TryClaimImmediate, not TryClaim. This called TryClaim with an empty path,
+        // and that form returns true without ever taking the lock -- the empty-path
+        // branch exists because a verb with nothing to collect must not wait out the
+        // settle window. So the claim this paragraph describes was doing nothing at
+        // all, and the defect it was written to fix was still there: select four
+        // files, choose 回收站, and four identical dialogs open. Reported by the user
+        // on 2026-10-15. TryClaimImmediate is the form that takes the lock without
+        // waiting, which is exactly what a no-selection verb needs.
+        if (args.Flag("--gui-errors") && !PendingSelection.TryClaimImmediate("reclaim"))
         {
             return 0;
         }
