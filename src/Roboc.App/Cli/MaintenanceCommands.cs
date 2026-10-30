@@ -115,7 +115,7 @@ internal static class MaintenanceCommands
 
         if (paths.Count == 0)
         {
-            ReportProblem(fromMenuEarly, Lang.Pick("⚠️没有收到任何选中的项目。\r\n\r\n", "⚠️No items were received.\r\n\r\n") +
+            ReportProblem(fromMenuEarly, Lang.Pick("没有收到任何选中的项目。\r\n\r\n", "No items were received.\r\n\r\n") +
                 Lang.Pick("如果这条是从右键菜单调用的，说明选中项没有传达到子菜单。", "If this was invoked from the context menu, the selection did not reach the submenu."),
                 Lang.Pick("没有收到选中项目", "No Items Received"));
             return 2;
@@ -130,7 +130,7 @@ internal static class MaintenanceCommands
 
         if (paths.Count == 0)
         {
-            ReportProblem(fromMenuEarly, Lang.Pick("⚠️没有收到任何选中的项目。", "⚠️No items were received."), Lang.Pick("没有收到选中项目", "No Items Received"));
+            ReportProblem(fromMenuEarly, Lang.Pick("没有收到任何选中的项目。", "No items were received."), Lang.Pick("没有收到选中项目", "No Items Received"));
             return 2;
         }
 
@@ -334,7 +334,7 @@ internal static class MaintenanceCommands
             return 0;
         }
 
-        string text = Lang.Pick($"⚠️已回收 {moved} 项，{failures.Count} 项失败：\r\n\r\n", $"⚠️Recycled {moved}, {failures.Count} failed:\r\n\r\n") +
+        string text = Lang.Pick($"已回收 {moved} 项，{failures.Count} 项失败：\r\n\r\n", $"Recycled {moved}, {failures.Count} failed:\r\n\r\n") +
                       string.Join("\r\n\r\n", failures.Take(10));
 
         if (failures.Count > 10)
@@ -385,7 +385,7 @@ internal static class MaintenanceCommands
 
         if (paths.Count == 0)
         {
-            ReportProblem(fromMenu, Lang.Pick("⚠️没有收到任何选中的项目。", "⚠️No items were received."), Lang.Pick("没有收到选中项目", "No Items Received"));
+            ReportProblem(fromMenu, Lang.Pick("没有收到任何选中的项目。", "No items were received."), Lang.Pick("没有收到选中项目", "No Items Received"));
             return 2;
         }
 
@@ -570,8 +570,8 @@ internal static class MaintenanceCommands
 
                 ShowDialog(
                     Lang.Pick(
-                        $"⚠️原路径已经存在 {conflicts.Count:N0} 个同名文件，默认保留回收站副本，\r\n你可以自行删除。",
-                        $"⚠️{conflicts.Count:N0} files with the same name already exist at the original location.\r\n"
+                        $"原路径已经存在 {conflicts.Count:N0} 个同名文件，默认保留回收站副本，\r\n你可以自行删除。",
+                        $"{conflicts.Count:N0} files with the same name already exist at the original location.\r\n"
                         + "The recycle bin copies have been kept, and you can delete them yourself."),
                     Lang.Pick("原路径已有同名文件", "Name Already Exists"),
                     warning: true,
@@ -614,7 +614,7 @@ internal static class MaintenanceCommands
             if (failures.Count > 0)
             {
                 var text = new System.Text.StringBuilder();
-                text.AppendLine(Lang.Pick($"⚠️已取回 {restored} 项，{failures.Count} 项失败：", $"⚠️Restored {restored}, {failures.Count} failed:"));
+                text.AppendLine(Lang.Pick($"已取回 {restored} 项，{failures.Count} 项失败：", $"Restored {restored}, {failures.Count} failed:"));
                 text.AppendLine();
 
                 foreach (string failure in failures.Take(10))
@@ -830,7 +830,7 @@ internal static class MaintenanceCommands
 
         if (paths.Count == 0)
         {
-            ReportProblem(fromMenu, Lang.Pick("⚠️没有收到任何选中的项目。\r\n\r\n", "⚠️No items were received.\r\n\r\n") +
+            ReportProblem(fromMenu, Lang.Pick("没有收到任何选中的项目。\r\n\r\n", "No items were received.\r\n\r\n") +
                 Lang.Pick("如果这条是从右键菜单调用的，说明选中项没有传达到子菜单。", "If this was invoked from the context menu, the selection did not reach the submenu."),
                 Lang.Pick("没有收到选中项目", "No Items Received"));
             return 2;
@@ -845,7 +845,7 @@ internal static class MaintenanceCommands
 
         if (paths.Count == 0)
         {
-            ReportProblem(fromMenu, Lang.Pick("⚠️没有收到任何选中的项目。", "⚠️No items were received."), Lang.Pick("没有收到选中项目", "No Items Received"));
+            ReportProblem(fromMenu, Lang.Pick("没有收到任何选中的项目。", "No items were received."), Lang.Pick("没有收到选中项目", "No Items Received"));
             return 2;
         }
 
@@ -1035,8 +1035,17 @@ internal static class MaintenanceCommands
 
     // ------------------------------------------------------------------ helpers
 
-    internal static void ReportProblemPublic(bool fromMenu, string message, string? caption = null)
-        => ReportProblem(fromMenu, message, caption);
+    /// <summary>
+    /// Shows a problem, optionally without the warning badge.
+    ///
+    /// <paramref name="warning"/> defaults to true because everything routed through here is
+    /// a problem report. The one exception is an *informational* result that shares the same
+    /// channel -- "nothing needed copying" -- and drawing a warning triangle over it would
+    /// say the opposite of what the message says.
+    /// </summary>
+    internal static void ReportProblemPublic(
+        bool fromMenu, string message, string? caption = null, bool warning = true)
+        => ReportProblem(fromMenu, message, caption, warning);
 
     /// <summary>
     /// Turns the paths from one invocation into the full selection.
@@ -1157,14 +1166,19 @@ internal static class MaintenanceCommands
     /// failure with no better short name, and for <see cref="ReportProblemPublic"/>;
     /// every call site that can name its own case should.
     /// </summary>
-    private static void ReportProblem(bool fromMenu, string message, string? caption = null)
+    private static void ReportProblem(
+        bool fromMenu, string message, string? caption = null, bool warning = true)
     {
         if (fromMenu)
         {
+            // warning: the badge, replacing the "⚠️ " that every one of these messages
+            // used to carry in its own text. The flag follows the meaning of the message
+            // rather than the characters it happens to start with, which is the property
+            // that survives the emoji being removed from the strings.
             ShowDialog(
                 message,
                 caption ?? Lang.Pick("出错了", "Something Went Wrong"),
-                warning: false,
+                warning: warning,
                 centre: true);
 
             return;
@@ -1275,15 +1289,15 @@ internal static class MaintenanceCommands
         var text = new System.Text.StringBuilder();
 
         text.AppendLine(complete
-            ? Lang.Pick($"⚠️即将彻底删除 {paths.Count:N0} 项：", $"⚠️About to permanently delete {paths.Count:N0} items:")
-            : Lang.Pick($"⚠️即将彻底删除 {paths.Count:N0} 项（其中部分内容仍在统计）：", $"⚠️About to permanently delete {paths.Count:N0} items (still counting some of them):"));
+            ? Lang.Pick($"即将彻底删除 {paths.Count:N0} 项：", $"About to permanently delete {paths.Count:N0} items:")
+            : Lang.Pick($"即将彻底删除 {paths.Count:N0} 项（其中部分内容仍在统计）：", $"About to permanently delete {paths.Count:N0} items (still counting some of them):"));
 
         text.AppendLine();
         text.AppendLine(StatRow(Lang.Pick("包含文件", "Files"), Lang.Pick($"{files:N0} 个", $"{files:N0}")));
         text.AppendLine(StatRow(Lang.Pick("包含文件夹", "Folders"), Lang.Pick($"{folders:N0} 个", $"{folders:N0}")));
         text.AppendLine(StatRow(Lang.Pick("共占空间", "Total size"), FormatBytes(bytes)));
         text.AppendLine();
-        text.AppendLine(Lang.Pick("⚠️此操作无法撤销。", "⚠️This cannot be undone."));
+        text.AppendLine(Lang.Pick("此操作无法撤销。", "This cannot be undone."));
         text.AppendLine();
         text.AppendLine(Lang.Pick("确定要继续吗？", "Continue?"));
 
@@ -1468,8 +1482,8 @@ internal static class MaintenanceCommands
         if (scan.Conflicts > 0)
         {
             text.AppendLine(scan.Complete
-                ? Lang.Pick($"⚠️目标位置已有 {scan.Conflicts:N0} 个同名项目：", $"⚠️The destination already has {scan.Conflicts:N0} items with the same name:")
-                : Lang.Pick($"⚠️目标位置至少有 {scan.Conflicts:N0} 个同名项目（仍在统计中）：", $"⚠️The destination has at least {scan.Conflicts:N0} items with the same name (still counting):"));
+                ? Lang.Pick($"目标位置已有 {scan.Conflicts:N0} 个同名项目：", $"The destination already has {scan.Conflicts:N0} items with the same name:")
+                : Lang.Pick($"目标位置至少有 {scan.Conflicts:N0} 个同名项目（仍在统计中）：", $"The destination has at least {scan.Conflicts:N0} items with the same name (still counting):"));
 
             text.AppendLine();
 

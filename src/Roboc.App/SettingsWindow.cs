@@ -185,7 +185,7 @@ internal static class SettingsWindow
             if (!_working.Save(out string error))
             {
                 MessageDialog.Show(
-                    Lang.Pick($"⚠️设置无法保存：\r\n\r\n{error}\r\n\r\n", $"⚠️Settings could not be saved:\r\n\r\n{error}\r\n\r\n") +
+                    Lang.Pick($"设置无法保存：\r\n\r\n{error}\r\n\r\n", $"Settings could not be saved:\r\n\r\n{error}\r\n\r\n") +
                     Lang.Pick("程序仍按原有设置运行。", "The program will carry on with the settings it already had."),
                     Lang.Pick("保存失败", "Save Failed"),
                     DialogButtons.Acknowledge,

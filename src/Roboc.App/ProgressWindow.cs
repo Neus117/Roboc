@@ -497,7 +497,7 @@ internal sealed class ProgressWindow : IDisposable
         var asker = new Thread(() =>
         {
             int answer = MessageDialog.Show(
-                Lang.Pick("⚠️确定要停止当前操作吗？\r\n\r\n已经完成的项目会保留，尚未处理的会被放弃。", "⚠️Stop this operation?\r\n\r\nItems already finished are kept; anything not yet started is abandoned."),
+                Lang.Pick("确定要停止当前操作吗？\r\n\r\n已经完成的项目会保留，尚未处理的会被放弃。", "Stop this operation?\r\n\r\nItems already finished are kept; anything not yet started is abandoned."),
                 Lang.Pick("停止操作", "Stop"),
                 DialogButtons.YesNo,
                 warning: true,

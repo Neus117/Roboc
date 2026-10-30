@@ -277,8 +277,8 @@ internal static class DeleteCommand
         var text = new System.Text.StringBuilder();
 
         text.AppendLine(Lang.Pick(
-            $"⚠️彻底删除未完成：{result.FilesCopied:N0} 项已删除，{result.FilesFailed:N0} 项失败。",
-            $"⚠️Permanent delete did not finish: {result.FilesCopied:N0} removed, {result.FilesFailed:N0} failed."));
+            $"彻底删除未完成：{result.FilesCopied:N0} 项已删除，{result.FilesFailed:N0} 项失败。",
+            $"Permanent delete did not finish: {result.FilesCopied:N0} removed, {result.FilesFailed:N0} failed."));
 
         text.AppendLine();
         text.AppendLine(Lang.Pick("失败的项目仍在原处。", "The items that failed are still where they were."));

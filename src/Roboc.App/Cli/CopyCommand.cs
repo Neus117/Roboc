@@ -486,14 +486,14 @@ internal static class CopyCommand
 
         string message = missing.Count == 1
             ? Lang.Pick(
-                $"⚠️要复制的东西已经不在了：\r\n\r\n{shown}\r\n\r\n" +
+                $"要复制的东西已经不在了：\r\n\r\n{shown}\r\n\r\n" +
                 $"它可能在复制之后被移动或删除了。请对它重新执行一次 Roboc → 复制。",
-                $"⚠️What was to be copied is no longer there:\r\n\r\n{shown}\r\n\r\n" +
+                $"What was to be copied is no longer there:\r\n\r\n{shown}\r\n\r\n" +
                 $"It may have been moved or deleted since. Run Roboc → Copy on it again.")
             : Lang.Pick(
-                $"⚠️有 {missing.Count} 项已经不在了：\r\n\r\n{shown}{more}\r\n\r\n" +
+                $"有 {missing.Count} 项已经不在了：\r\n\r\n{shown}{more}\r\n\r\n" +
                 $"它们可能在复制之后被移动或删除了。请重新执行一次 Roboc → 复制。",
-                $"⚠️{missing.Count} items are no longer there:\r\n\r\n{shown}{more}\r\n\r\n" +
+                $"{missing.Count} items are no longer there:\r\n\r\n{shown}{more}\r\n\r\n" +
                 $"They may have been moved or deleted since. Run Roboc → Copy again.");
 
         if (fromMenu)
@@ -545,14 +545,14 @@ internal static class CopyCommand
 
         string message = driveExists
             ? Lang.Pick(
-                $"⚠️目标位置的上层文件夹不存在，无法在其中创建：\r\n\r\n{destination}\r\n\r\n" +
+                $"目标位置的上层文件夹不存在，无法在其中创建：\r\n\r\n{destination}\r\n\r\n" +
                 $"请先在资源管理器中创建它，或改粘贴到已有的文件夹。\r\n\r\n（{NativeError.DescribeWin32(error)}）",
-                $"⚠️The folder above the destination does not exist, so nothing can be created in it:\r\n\r\n{destination}\r\n\r\n" +
+                $"The folder above the destination does not exist, so nothing can be created in it:\r\n\r\n{destination}\r\n\r\n" +
                 $"Create it in Explorer first, or paste into a folder that exists.\r\n\r\n({NativeError.DescribeWin32(error)})")
             : Lang.Pick(
-                $"⚠️目标位置的驱动器不存在或未就绪：\r\n\r\n{destination}\r\n\r\n" +
+                $"目标位置的驱动器不存在或未就绪：\r\n\r\n{destination}\r\n\r\n" +
                 $"请确认该驱动器已连接。\r\n\r\n（{NativeError.DescribeWin32(error)}）",
-                $"⚠️The drive for the destination does not exist or is not ready:\r\n\r\n{destination}\r\n\r\n" +
+                $"The drive for the destination does not exist or is not ready:\r\n\r\n{destination}\r\n\r\n" +
                 $"Check that it is connected.\r\n\r\n({NativeError.DescribeWin32(error)})");
 
         if (fromMenu)
@@ -616,14 +616,18 @@ internal static class CopyCommand
                     Lang.Pick(
                         $"ℹ️没有需要复制的项目：目标位置的 {result.FilesSkipped:N0} 项与来源完全相同。",
                         $"ℹ️Nothing needed copying: the {result.FilesSkipped:N0} items at the destination are already identical to the source."),
-                    Lang.Pick("无需复制", "Nothing to Copy"));
+                    Lang.Pick("无需复制", "Nothing to Copy"),
+                    // Not a warning: nothing went wrong. Without this the shared reporting
+                    // path would draw a warning triangle over a message that says there was
+                    // nothing to do.
+                    warning: false);
             }
 
             return;
         }
 
         var text = new System.Text.StringBuilder();
-        text.AppendLine(Lang.Pick($"⚠️复制 {result.FilesCopied:N0} 项成功，{result.FilesFailed:N0} 项失败。", $"⚠️{result.FilesCopied:N0} copied, {result.FilesFailed:N0} failed."));
+        text.AppendLine(Lang.Pick($"复制 {result.FilesCopied:N0} 项成功，{result.FilesFailed:N0} 项失败。", $"{result.FilesCopied:N0} copied, {result.FilesFailed:N0} failed."));
         text.AppendLine();
 
         foreach (JobError error in result.Errors.Take(8))

@@ -76,6 +76,7 @@ internal static class MessageDialog
         // mixing them up draws nothing at all.
         private const uint DT_CENTER = 0x00000001;
         private const uint DT_WORDBREAK = 0x00000010;
+        private const uint DT_SINGLELINE = 0x00000020;
         private const uint DT_PATH_ELLIPSIS = 0x00004000;
         private const uint DT_CALCRECT = 0x00000400;
         private const uint DT_NOPREFIX = 0x00000800;
@@ -98,6 +99,21 @@ internal static class MessageDialog
         private int _bodyHeight;
         private int _buttonTop;
         private readonly List<(int Left, int Width)> _buttonRects = [];
+
+        // The message, split for layout: a headline (drawn a shade heavier) and the
+        // details under it. Only warning dialogs split; everything else keeps one block
+        // so its appearance is unchanged.
+        private string _headline = string.Empty;
+        private string _tail = string.Empty;
+        private int _headlineHeight;
+        private int _tailHeight;
+        private int _textLeft;
+        private int _textTop;
+        private int _tailTop;
+        private int _textWidth;
+        private int _badgeSize;
+        private int _badgeTop;
+        private nint _headlineFont;
 
         internal DialogWindow(
             string text, string caption, DialogButtons buttons, bool warning, bool centre)
@@ -158,28 +174,59 @@ internal static class MessageDialog
         /// <summary>
         /// Measures the text before creating the window, so the card is the size of its
         /// content rather than a fixed size that is wrong for every message.
+        ///
+        /// <b>Two layouts, one card.</b> A warning gets a badge column on the left, a
+        /// heavier first line and a left-aligned block; everything else keeps the centred
+        /// single block it has always had. The badge replaces the "⚠️ " that used to open
+        /// the message string -- see <see cref="WarningBadge"/> for why a drawn shape
+        /// replaced the character.
         /// </summary>
         private void Layout(nint instance)
         {
             int margin = Scaled(24, _dpi);
             int maxTextWidth = Scaled(420, _dpi);
 
+            SplitHeadline();
+
             nint measureDc = GetDC(0);
-            nint previous = SelectObject(measureDc, BodyFont());
-            RECT measured = new() { Left = 0, Top = 0, Right = maxTextWidth, Bottom = 0 };
-            DrawTextW(
-                measureDc, _text, _text.Length, ref measured,
-                DT_WORDBREAK | DT_PATH_ELLIPSIS | DT_CALCRECT | (_centre ? DT_CENTER : 0));
-            SelectObject(measureDc, previous);
+            int lineHeight = MeasureLineHeight(measureDc);
+
+            // Sized against the body line height, not against DPI: "a little bigger than
+            // the text" is the requirement, and it has to hold at every scale.
+            _badgeSize = _warning
+                ? Math.Max(
+                    Scaled(16, _dpi),
+                    (int)Math.Round(lineHeight * WarningBadge.SideToLineHeight))
+                : 0;
+
+            int badgeGap = _warning ? Scaled(WarningBadge.Gap, _dpi) : 0;
+            int badgeColumn = _warning ? _badgeSize + badgeGap : 0;
+
+            // The badge gets its own column, so it does not narrow the reading measure.
+            _textWidth = _warning
+                ? Math.Max(Scaled(200, _dpi), maxTextWidth - badgeColumn)
+                : maxTextWidth;
+
+            _headlineHeight = MeasureText(measureDc, _headline, _textWidth, _warning);
+            _tailHeight = _tail.Length > 0 ? MeasureText(measureDc, _tail, _textWidth, false) : 0;
             ReleaseDC(0, measureDc);
 
-            _bodyHeight = measured.Bottom - measured.Top;
+            int detailsGap = _tail.Length > 0 ? Scaled(10, _dpi) : 0;
 
-            // Centring is per line, by DT_CENTER in Paint. An attempt to centre the
-            // whole block instead -- measure the longest line, then left-align inside
-            // that width -- was reverted: the measurement did not work out and the
-            // text ended up pinned to the left edge, which looked worse than the
-            // per-line centring it replaced.
+            // The badge is taller than a line of text, so the text block starts lower by
+            // half the difference: that puts the first line's centre on the badge's centre,
+            // which is what makes the two read as one row.
+            int firstLinePad = _warning ? Math.Max(0, (_badgeSize - lineHeight) / 2) : 0;
+
+            int contentTop = Scaled(24, _dpi);
+
+            _badgeTop = contentTop;
+            _textTop = contentTop + firstLinePad;
+            _textLeft = margin + badgeColumn;
+            _tailTop = _textTop + _headlineHeight + detailsGap;
+
+            int textHeight = firstLinePad + _headlineHeight + detailsGap + _tailHeight;
+            _bodyHeight = Math.Max(_badgeSize, textHeight);
 
             int buttonHeight = Scaled(32, _dpi);
             int buttonWidth = Scaled(96, _dpi);
@@ -188,10 +235,10 @@ internal static class MessageDialog
             string[] labels = Labels;
             int buttonsWidth = (labels.Length * buttonWidth) + ((labels.Length - 1) * gap);
 
-            int bodyTop = Scaled(24, _dpi);
-            int buttonsTop = bodyTop + _bodyHeight + Scaled(28, _dpi);
+            int buttonsTop = contentTop + _bodyHeight + Scaled(28, _dpi);
 
-            int clientWidth = Math.Max(maxTextWidth, buttonsWidth) + (margin * 2);
+            int clientWidth =
+                Math.Max(badgeColumn + _textWidth, buttonsWidth) + (margin * 2);
             int clientHeight = buttonsTop + buttonHeight + Scaled(20, _dpi);
 
             _buttonTop = buttonsTop;
@@ -262,6 +309,99 @@ internal static class MessageDialog
             }
 
             return _buttonFont;
+        }
+
+        /// <summary>The first line of a warning, a shade heavier than the details.</summary>
+        private nint HeadlineFont()
+        {
+            if (!_warning)
+            {
+                return BodyFont();
+            }
+
+            if (_headlineFont == 0)
+            {
+                _headlineFont = Fonts.Create(10.0, 600, _dpi);
+            }
+
+            return _headlineFont;
+        }
+
+        /// <summary>
+        /// Splits a warning message into the sentence that names the problem and the
+        /// details under it.
+        ///
+        /// The messages were already written that way -- a summary line, a blank line, then
+        /// what to do about it -- but every line rendered with the same weight, so the
+        /// summary did not read as one. Splitting it here lets the layout give the two
+        /// different treatment without touching a single message string.
+        ///
+        /// Non-warning dialogs are left as one block, which keeps their appearance exactly
+        /// as it was.
+        /// </summary>
+        private void SplitHeadline()
+        {
+            _headline = _text;
+            _tail = string.Empty;
+
+            if (!_warning || _text.Length == 0)
+            {
+                return;
+            }
+
+            int cut = _text.IndexOf("\r\n\r\n", StringComparison.Ordinal);
+
+            if (cut >= 0)
+            {
+                _headline = _text[..cut].TrimEnd();
+                _tail = _text[(cut + 4)..].TrimStart();
+                return;
+            }
+
+            cut = _text.IndexOf('\n');
+
+            if (cut >= 0)
+            {
+                _headline = _text[..cut].TrimEnd();
+                _tail = _text[(cut + 1)..].TrimStart();
+            }
+        }
+
+        /// <summary>
+        /// One line of body text, measured with the very font and DC that will draw it.
+        ///
+        /// Measured rather than assumed: the badge is sized from this, and a badge sized
+        /// from a guessed line height comes out visibly wrong next to the text -- the same
+        /// "measure and draw must use one source" mistake the visual specification records.
+        /// </summary>
+        private int MeasureLineHeight(nint dc)
+        {
+            nint previous = SelectObject(dc, BodyFont());
+            RECT one = new() { Left = 0, Top = 0, Right = 10000, Bottom = 0 };
+            DrawTextW(
+                dc, "国Ag", 3, ref one,
+                DT_SINGLELINE | DT_NOPREFIX | DT_CALCRECT);
+            SelectObject(dc, previous);
+
+            return Math.Max(1, one.Bottom - one.Top);
+        }
+
+        /// <summary>Height of <paramref name="text"/> wrapped into <paramref name="width"/>.</summary>
+        private int MeasureText(nint dc, string text, int width, bool headline)
+        {
+            if (text.Length == 0)
+            {
+                return 0;
+            }
+
+            nint previous = SelectObject(dc, headline ? HeadlineFont() : BodyFont());
+            RECT measured = new() { Left = 0, Top = 0, Right = width, Bottom = 0 };
+            DrawTextW(
+                dc, text, text.Length, ref measured,
+                DT_WORDBREAK | DT_PATH_ELLIPSIS | DT_CALCRECT);
+            SelectObject(dc, previous);
+
+            return measured.Bottom - measured.Top;
         }
 
         private void ApplyWindows11Style(nint hwnd)
@@ -444,14 +584,14 @@ internal static class MessageDialog
             SetBkMode(buffer, 1);
             SetTextColor(buffer, palette.Text);
 
-            nint oldFont = SelectObject(buffer, BodyFont());
-            RECT body = new()
+            // The badge first, so the text column is drawn over the same surface.
+            // An outline triangle is filled with the text colour and then hollowed with the
+            // card colour, which is why the background has to be passed in.
+            if (_warning)
             {
-                Left = margin,
-                Top = Scaled(24, _dpi),
-                Right = width - margin,
-                Bottom = Scaled(24, _dpi) + _bodyHeight,
-            };
+                WarningBadge.Draw(
+                    buffer, margin, _badgeTop, _badgeSize, palette.Text, palette.Window);
+            }
 
             // DT_WORDBREAK | DT_NOPREFIX | DT_PATH_ELLIPSIS. NOT DT_CALCRECT.
             //
@@ -467,9 +607,39 @@ internal static class MessageDialog
             // off". This shortens such a token from the middle, which keeps both ends of a
             // path recognisable, and the measurement above must carry the same flag or the
             // height it returns will not match what is drawn.
-            DrawTextW(
-                buffer, _text, _text.Length, ref body,
-                DT_WORDBREAK | DT_NOPREFIX | DT_PATH_ELLIPSIS | (_centre ? DT_CENTER : 0));
+            //
+            // A warning is left-aligned even when the caller asked for centring: a centred
+            // block next to an icon on the left reads as two unrelated things. Centring
+            // still applies to the dialogs that have no badge.
+            uint alignment = _centre && !_warning ? DT_CENTER : 0;
+            uint flags = DT_WORDBREAK | DT_NOPREFIX | DT_PATH_ELLIPSIS | alignment;
+
+            nint oldFont = SelectObject(buffer, HeadlineFont());
+            RECT headline = new()
+            {
+                Left = _textLeft,
+                Top = _textTop,
+                Right = _textLeft + _textWidth,
+                Bottom = _textTop + _headlineHeight,
+            };
+
+            DrawTextW(buffer, _headline, _headline.Length, ref headline, flags);
+
+            if (_tail.Length > 0)
+            {
+                SelectObject(buffer, BodyFont());
+
+                RECT tail = new()
+                {
+                    Left = _textLeft,
+                    Top = _tailTop,
+                    Right = _textLeft + _textWidth,
+                    Bottom = _tailTop + _tailHeight,
+                };
+
+                DrawTextW(buffer, _tail, _tail.Length, ref tail, flags);
+            }
+
             SelectObject(buffer, oldFont);
 
             string[] labels = Labels;

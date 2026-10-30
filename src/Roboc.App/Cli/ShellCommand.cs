@@ -71,7 +71,7 @@ internal static class ShellCommand
         {
             MaintenanceCommands.ReportProblemPublic(
                 fromMenu,
-                Lang.Pick("⚠️没有收到任何选中的项目。\r\n\r\n", "⚠️No items were received.\r\n\r\n") +
+                Lang.Pick("没有收到任何选中的项目。\r\n\r\n", "No items were received.\r\n\r\n") +
                 Lang.Pick("如果这条是从右键菜单调用的，说明选中项没有传达到子菜单。", "If this came from the context menu, the selection did not reach the submenu."),
                 Lang.Pick("没有收到选中项目", "No Items Received"));
 
@@ -94,7 +94,7 @@ internal static class ShellCommand
         {
             MaintenanceCommands.ReportProblemPublic(
                 fromMenu,
-                Lang.Pick("⚠️没有收到任何选中的项目。", "⚠️No items were received."),
+                Lang.Pick("没有收到任何选中的项目。", "No items were received."),
                 Lang.Pick("没有收到选中项目", "No Items Received"));
 
             return 2;
@@ -105,7 +105,7 @@ internal static class ShellCommand
         {
             MaintenanceCommands.ReportProblemPublic(
                 fromMenu,
-                Lang.Pick($"⚠️写入剪贴板失败：{failure}", $"⚠️Could not write to the clipboard: {failure}"),
+                Lang.Pick($"写入剪贴板失败：{failure}", $"Could not write to the clipboard: {failure}"),
                 Lang.Pick("无法写入剪贴板", "Could Not Write to the Clipboard"));
 
             return 1;
@@ -209,7 +209,7 @@ internal static class ShellCommand
         {
             MaintenanceCommands.ReportProblemPublic(
                 fromMenu,
-                Lang.Pick("⚠️剪贴板里没有文件。\r\n\r\n请先对要复制的项目使用 Roboc → 复制。", "⚠️There are no files on the clipboard.\r\n\r\nUse Roboc → Copy on what you want to copy first."),
+                Lang.Pick("剪贴板里没有文件。\r\n\r\n请先对要复制的项目使用 Roboc → 复制。", "There are no files on the clipboard.\r\n\r\nUse Roboc → Copy on what you want to copy first."),
                 Lang.Pick("剪贴板里没有文件", "Clipboard Is Empty"));
 
             return 2;

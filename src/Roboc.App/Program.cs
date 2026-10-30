@@ -197,11 +197,11 @@ internal static class Program
             {
                 MessageDialog.Show(
                     Lang.Pick(
-                        $"⚠️无法注册右键菜单：\r\n\r\n{(failure.Length > 0 ? failure : "未注册任何项")}\r\n\r\n"
+                        $"无法注册右键菜单：\r\n\r\n{(failure.Length > 0 ? failure : "未注册任何项")}\r\n\r\n"
                         + "可以改用命令行使用：\r\n"
                         + "　roboc copy --to <目标> <来源>\r\n"
                         + "　roboc --help　查看全部命令",
-                        $"⚠️The context menu could not be registered:\r\n\r\n{(failure.Length > 0 ? failure : "nothing was registered")}\r\n\r\n"
+                        $"The context menu could not be registered:\r\n\r\n{(failure.Length > 0 ? failure : "nothing was registered")}\r\n\r\n"
                         + "You can still use it from the command line:\r\n"
                         + "  roboc copy --to <destination> <source>\r\n"
                         + "  roboc --help   lists every command"),

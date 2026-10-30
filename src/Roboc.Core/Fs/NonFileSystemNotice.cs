@@ -60,13 +60,13 @@ internal static class NonFileSystemNotice
     /// standing as a fourth paragraph.
     /// </summary>
     public static string Text => Lang.Pick(
-        "⚠️这个位置不在文件系统内。\r\n\r\n" +
+        "这个位置不在文件系统内。\r\n\r\n" +
         "便携设备（手机、相机等以 MTP 连接）、库、搜索结果、压缩包里的内容由资源管理器用 " +
         "shell 命名空间表示，没有文件系统路径。\r\n\r\n" +
         "本工具无法在 MTP 设备与其它存储之间传送文件、处理 MTP 设备上的数据，请使用资源管理器。" +
         "（支持与否取决于路径能否表示成文件系统路径，与存储介质类型无关）",
 
-        "⚠️This location is not in the file system.\r\n\r\n" +
+        "This location is not in the file system.\r\n\r\n" +
         "Content inside a portable device (a phone or camera connected over MTP), a library, " +
         "a search result or an archive is represented by Explorer through the shell namespace " +
         "and has no file system path.\r\n\r\n" +

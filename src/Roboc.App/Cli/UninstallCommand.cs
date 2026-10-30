@@ -132,7 +132,7 @@ internal static class UninstallCommand
     {
         var text = new System.Text.StringBuilder();
 
-        text.AppendLine(Lang.Pick("⚠️即将移除 Roboc：", "⚠️About to remove Roboc:"));
+        text.AppendLine(Lang.Pick("即将移除 Roboc：", "About to remove Roboc:"));
         text.AppendLine();
         text.AppendLine(Lang.Pick("　✅ 右键菜单与发送到菜单", "  ✅ Context menu and Send To entry"));
         text.AppendLine(Lang.Pick("　✅ 程序数据与设置", "  ✅ Program data and settings"));
@@ -159,7 +159,7 @@ internal static class UninstallCommand
         if (bins.Count > 0)
         {
             text.AppendLine();
-            text.AppendLine(Lang.Pick("⚠️不会动你的回收站——里面是文件，不是程序数据：", "⚠️Your recycle bins will not be touched -- they hold files, not program data:"));
+            text.AppendLine(Lang.Pick("不会动你的回收站——里面是文件，不是程序数据：", "Your recycle bins will not be touched -- they hold files, not program data:"));
             text.AppendLine();
 
             foreach ((string root, long bytes) in bins)
@@ -318,7 +318,7 @@ internal static class UninstallCommand
 
         if (removed.Count > 0)
         {
-            text.AppendLine(Lang.Pick("⚠️已清除以下内容：", "⚠️Removed:"));
+            text.AppendLine(Lang.Pick("已清除以下内容：", "Removed:"));
             text.AppendLine();
 
             foreach (string line in removed)
@@ -331,7 +331,7 @@ internal static class UninstallCommand
 
         if (failed.Count > 0)
         {
-            text.AppendLine(Lang.Pick("⚠️以下内容未能清除：", "⚠️Could not be removed:"));
+            text.AppendLine(Lang.Pick("以下内容未能清除：", "Could not be removed:"));
             text.AppendLine();
 
             foreach (string line in failed)
@@ -344,7 +344,7 @@ internal static class UninstallCommand
 
         if (bins.Count > 0)
         {
-            text.AppendLine(Lang.Pick("⚠️回收站未动——里面是你的文件：", "⚠️Recycle bins untouched -- they hold your files:"));
+            text.AppendLine(Lang.Pick("回收站未动——里面是你的文件：", "Recycle bins untouched -- they hold your files:"));
             text.AppendLine();
 
             foreach ((string root, long bytes) in bins)
