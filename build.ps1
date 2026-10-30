@@ -148,6 +148,25 @@ function Set-MediumIntegrity([string]$path) {
         $check = (cmd /c icacls "$path" 2>&1 | Out-String)
         if ($check -match 'Medium Mandatory Level') { return $true }
 
+        # Refused. Grant ourselves full control once, then retry.
+        #
+        # Why this step exists. Setting an integrity label needs more than write access, and
+        # a freshly published executable inherits only "Authenticated Users:(M)" when the
+        # artifacts directory has just been recreated -- (M) is not enough, so both the call
+        # above and the copy below are refused, and the copy inherits the very same ACL.
+        # Seen on 2026-10-30 after deleting artifacts/ to clean the tree: the build failed
+        # with "Access is denied", and retrying would never have fixed it.
+        #
+        # The build user owns the file it just published, and an owner may rewrite its DACL,
+        # so this succeeds where the label write did not. "${me}" with braces on purpose:
+        # "$me:(F)" parses as a scope, not as a variable followed by a colon.
+        $me = "$env:USERDOMAIN\$env:USERNAME"
+        cmd /c icacls "$path" /grant "${me}:(F)" 2>&1 | Out-Null
+        cmd /c icacls "$path" /setintegritylevel Medium 2>&1 | Out-Null
+
+        $check = (cmd /c icacls "$path" 2>&1 | Out-String)
+        if ($check -match 'Medium Mandatory Level') { return $true }
+
         # The direct write was refused. Try the copy-and-rename route.
         $staging = "$path.new"
         Remove-Item $staging -Force -ErrorAction SilentlyContinue
