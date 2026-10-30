@@ -40,7 +40,7 @@ internal static class UninstallCommand
         //
         // The 设置 entry takes no selection, and Explorer still invokes a path-less
         // verb once per selected item -- so selecting four files and choosing 设置
-        // opened four identical settings windows. Reported by the user on 2026-10-15,
+        // opened four identical settings windows. Reported on 2026-10-15,
         // the same day and the same cause as the identical defect in 回收站.
         //
         // The claim is deliberately confined to the menu path: `roboc settings` typed

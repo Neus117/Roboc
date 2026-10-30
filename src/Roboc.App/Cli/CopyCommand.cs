@@ -86,7 +86,7 @@ internal static class CopyCommand
         // progress window appears *behind* the dialog, with 取消 and 关闭 that never
         // receive a message and cannot be clicked.
         //
-        // Reported by the user on 2026-10-15, twice, with screenshots. Rejecting here means
+        // Reported on 2026-10-15, twice, with screenshots. Rejecting here means
         // the window has not been started at all, which is the only clean fix.
         //
         // Both ends are checked, and the destination matters as much as the sources:
@@ -108,7 +108,7 @@ internal static class CopyCommand
         // and the same ordering defect above returns: the dialog opens first and the
         // blank window appears behind it.
         //
-        // Reported by the user on 2026-10-15 after the multi-select verbs were fixed:
+        // Reported on 2026-10-15 after the multi-select verbs were fixed:
         // pasting to a target that had been deleted left the error dialog and an empty
         // 正在复制 window on screen together.
         //
@@ -131,7 +131,7 @@ internal static class CopyCommand
         // error dialog first, then a blank 正在复制 window behind it with 暂停 and 取消
         // that never receive a message.
         //
-        // Reported by the user on 2026-10-15, with a screenshot, immediately after the
+        // Reported on 2026-10-15, with a screenshot, immediately after the
         // destination half was fixed: reverting to the pre-existing behaviour is a fair
         // thing for a report to do, because from the outside it is the same bug.
         //
@@ -175,7 +175,7 @@ internal static class CopyCommand
         // window -- so 取消 and 关闭 are painted but dead, and the window can only be
         // dismissed through the dialog.
         //
-        // Reported by the user on 2026-10-15 with a screenshot: a paste the guard refused
+        // Reported on 2026-10-15 with a screenshot: a paste the guard refused
         // left the progress window and the error dialog on screen together.
         //
         // Note the explicit Dispose in a finally, rather than a using declaration.

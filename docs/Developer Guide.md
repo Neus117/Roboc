@@ -364,7 +364,7 @@ deliberately:
 | `Text` | the dialogs on the copy and delete paths | 156 chars | there is room to explain, and to state the test |
 | `Reason` | the failure lists on the recycle and restore paths | 93 chars | ten such lines can appear in one dialog — but it keeps the technical detail of *why* there is no path |
 
-**`Reason` was once cut down to a single clause and the user rejected it**: 「过于简短，我更偏向于之前那个版本……不要完全丢失技术细节」 — too brief, I prefer the earlier version; do not lose the technical detail entirely. **The costs are not symmetric**: too long is merely wordy, too short teaches a reader who does not already know what a shell namespace is exactly nothing. So it keeps the mechanism and drops the full explanation and the supported-storage paragraph, which belong to the dialog.
+**`Reason` was once cut down to a single clause and was rejected on review**: 「过于简短，我更偏向于之前那个版本……不要完全丢失技术细节」 — too brief, I prefer the earlier version; do not lose the technical detail entirely. **The costs are not symmetric**: too long is merely wordy, too short teaches a reader who does not already know what a shell namespace is exactly nothing. So it keeps the mechanism and drops the full explanation and the supported-storage paragraph, which belong to the dialog.
 
 The earlier version was written out in five places in four different phrasings; that is gone.
 Changing a sentence is now one edit.
@@ -455,7 +455,7 @@ it.**
 | **The Mica material** | The window background's Mica was removed | **The title bar is drawn by DWM and kept its Mica** — so the bar followed the wallpaper while the body stayed neutral grey |
 | **Menu icons** | `WriteFlat` called `IconFor` correctly | **`WriteCascade` — the default layout — hard-coded `quotedExe + ",0"`**, so six entries showed one icon |
 | **Settings persistence** | Both `Load()` and `Save()` were written | **`Save` still used the reflection overload**, which must throw in a trimmed build |
-| **The progress window and a dialog together** | The progress window was disposed, so it looked handled | **Both verbs disposed it at the end of the block, and the dialog on the failure path is shown *inside* that block** — so the modal dialog appeared first. A modal dialog runs its own message loop, so 取消 and 关闭 were painted but dead: the progress window could only be dismissed through the dialog. A `using` declaration is disposed at the end of its scope; a `finally` runs before the `catch` that follows it, which is the order actually needed. **Reported by the user on 2026-10-15 with a screenshot** |
+| **The progress window and a dialog together** | The progress window was disposed, so it looked handled | **Both verbs disposed it at the end of the block, and the dialog on the failure path is shown *inside* that block** — so the modal dialog appeared first. A modal dialog runs its own message loop, so 取消 and 关闭 were painted but dead: the progress window could only be dismissed through the dialog. A `using` declaration is disposed at the end of its scope; a `finally` runs before the `catch` that follows it, which is the order actually needed. **Reported by the maintainer on 2026-10-15 with a screenshot** |
 | **The "reveal" after a paste** | `SHOpenFolderAndSelectItems` called on its own did reuse the window | **Called by the program, it does not** — an already-open destination still gets a new window beside it. The criterion used was "the API works on its own", not "what the user sees" (section 17) |
 
 **The Mica case is the clearest.** The comment written when Mica was first removed says:
@@ -1115,12 +1115,12 @@ get through this kind of defect.**
 
 ## Why this has a section of its own
 
-On 2026-10-14 the user found more than a dozen test directories in the root of `D:\`. The test
+On 2026-10-14 the maintainer found more than a dozen test directories in the root of `D:\`. The test
 cases had created every one of them — `D:\roboc-restore-test`, `D:\roboc-marker-test`,
 `D:\roboc-open-verify` and the like — **harmless one at a time, and together a heap of rubbish
 growing in someone else's drive root.**
 
-**The user's words: 「你这样很不规范。」** ("This is very unprofessional.") That is correct.
+**The review comment: 「你这样很不规范。」** ("This is very unprofessional.") That is correct.
 
 ## Three rules
 
@@ -1141,7 +1141,7 @@ day, and the directory itself deleted.
 
 **2. Delete on the spot, not "at the end of the round"**
 
-**The user asked for this explicitly on 2026-10-14**: 「以后每次生成临时测试文件并完成相关目标后及时删除」 — every
+**The maintainer asked for this explicitly on 2026-10-14**: 「以后每次生成临时测试文件并完成相关目标后及时删除」 — every
 time temporary test files are created, delete them promptly once the goal is met.
 
 **Why "clean up at the end" is not enough**: a round of work contains many moments at which "the
@@ -1206,7 +1206,7 @@ fault as "cleanup must scan, not remember": **using what you assume instead of w
 
 # 15. Firefighting record: six layers of one recycle-bin defect
 
-**2026-10-14. The user reported 「坏了坏了重大bug」 ("something is badly broken"). Six rounds
+**2026-10-14. The maintainer reported 「坏了坏了重大bug」 ("something is badly broken"). Six rounds
 followed; every round believed it was fixed, and every round had a next layer.**
 
 This section is not a log of events. It is here because **five of the six layers are the same

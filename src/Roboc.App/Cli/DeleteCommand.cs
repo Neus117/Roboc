@@ -147,7 +147,7 @@ internal static class DeleteCommand
         // window -- so 取消 and 关闭 are painted but dead, and the window can only be
         // dismissed through the dialog.
         //
-        // Reported by the user on 2026-10-15 with a screenshot: a refused delete left the
+        // Reported on 2026-10-15 with a screenshot: a refused delete left the
         // progress window and the error dialog on screen together. The copy path had the
         // same shape.
         //
@@ -241,7 +241,7 @@ internal static class DeleteCommand
         // From a menu there is no console, and the engine reports per-item failures only
         // through PrintSummary (stdout) and JobResult.Errors. Neither reaches the user, so a
         // delete that failed on every item used to end with exit code 3, the folder untouched
-        // and nothing on screen at all. Reported by the user on 2026-10-30 against a protected
+        // and nothing on screen at all. Reported on 2026-10-30 against a protected
         // folder under Program Files; reproduced with an ACL that denies DELETE.
         if (fromMenu && (result.FilesFailed > 0 || result.Errors.Count > 0))
         {

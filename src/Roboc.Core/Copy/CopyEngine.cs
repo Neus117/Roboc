@@ -328,7 +328,7 @@ public static class CopyEngine
 
             // The command itself, because "delete it" leaves the user to work out which
             // tool and which quoting -- and a staging file is exactly the case where the
-            // path is long and unfamiliar. Reported by the user on 2026-10-15: after a
+            // path is long and unfamiliar. Reported on 2026-10-15: after a
             // disk-full abort, re-running resumed correctly and skipped the finished
             // items, but the 240 MB staging file was still holding the space, so the
             // large file failed again and the report told them to delete it without

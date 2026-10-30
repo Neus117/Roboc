@@ -674,7 +674,7 @@ internal static class MaintenanceCommands
         // branch exists because a verb with nothing to collect must not wait out the
         // settle window. So the claim this paragraph describes was doing nothing at
         // all, and the defect it was written to fix was still there: select four
-        // files, choose 回收站, and four identical dialogs open. Reported by the user
+        // files, choose 回收站, and four identical dialogs open. Reported
         // on 2026-10-15. TryClaimImmediate is the form that takes the lock without
         // waiting, which is exactly what a no-selection verb needs.
         if (args.Flag("--gui-errors") && !PendingSelection.TryClaimImmediate("reclaim"))
@@ -1160,7 +1160,7 @@ internal static class MaintenanceCommands
     /// through here with one caption, 出错了 / "Something Went Wrong" -- true of all of
     /// them and informative about none. The rest of the program's windows name the thing
     /// they are about (正在复制, 回收站为空, 确认卸载), so a dialog titled 出错了 stood out
-    /// as the one that did not say what it was. Reported by the user on 2026-10-15.
+    /// as the one that did not say what it was. Reported on 2026-10-15.
     ///
     /// The default is kept for callers whose message is already a sentence about a
     /// failure with no better short name, and for <see cref="ReportProblemPublic"/>;

@@ -50,7 +50,7 @@ internal static class NonFileSystemNotice
     /// <b>Two verbs, not one.</b> The sentence names both "moving files between an MTP
     /// device and other storage" and "handling data on an MTP device". Reading, deleting and
     /// recycling a device item are none of them a *transfer* between two places, so a
-    /// transfer-only wording left the delete scenario uncovered -- reported by the user on
+    /// transfer-only wording left the delete scenario uncovered -- reported on
     /// 2026-10-15, who had tested paste in both directions and delete not at all.
     ///
     /// The closing note is a parenthetical rather than a sentence, so it carries no full
