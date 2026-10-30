@@ -46,6 +46,7 @@ internal static class FastDeleter
         string trimmed = PathUtil.TrimTrailingSeparator(extendedPath);
 
         int status = Open(trimmed, directory, out nint handle);
+        int firstStatus = status;
 
         // A mislabelled entry is cheap to recover from. Reparse points in
         // particular can present as either kind.
@@ -56,9 +57,22 @@ internal static class FastDeleter
 
         if (status != NativeConst.STATUS_SUCCESS)
         {
-            win32Code = (int)Ntdll.RtlNtStatusToDosError(status);
+            // Report the FIRST attempt's status, not the retry's.
+            //
+            // The first attempt is the one that matches what the caller says the entry is.
+            // The retry is a guess, and when both fail its status describes the guess rather
+            // than the entry: a file whose ACL denies DELETE fails the first open with
+            // ACCESS_DENIED, then fails the directory retry with NOT_A_DIRECTORY -- and that
+            // second error was the one shown to the user, as "目录名称无效", for what is
+            // really a permission problem. Measured on 2026-10-30 with an ACL that denies
+            // DELETE: reported 0xC0000103 (STATUS_NOT_A_DIRECTORY) instead of 0xC0000022.
+            //
+            // It also misclassified the failure, because Classify maps ERROR_INVALID_NAME to
+            // PathTooLong -- so the elevation hint never got a chance to appear.
+            int reported = firstStatus;
+            win32Code = (int)Ntdll.RtlNtStatusToDosError(reported);
             kind = Classify(win32Code);
-            message = NativeError.DescribeNtStatus(status);
+            message = NativeError.DescribeNtStatus(reported);
             return false;
         }
 

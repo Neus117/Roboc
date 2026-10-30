@@ -910,44 +910,20 @@ internal static class MaintenanceCommands
             forwarded[next + i] = paths[i];
         }
 
-        // The delete engine reports failures through Console.Error, which goes
-        // nowhere when the verb was invoked from a menu. Capturing it here rather
-        // than changing the engine keeps the fix in one place and works for any
-        // command that reports the same way.
-        if (!fromMenu)
-        {
-            return DeleteCommand.Run(new Args(forwarded));
-        }
-
-        TextWriter originalError = Console.Error;
-        var captured = new StringWriter();
-
-        try
-        {
-            Console.SetError(captured);
-            int exitCode = DeleteCommand.Run(new Args(forwarded));
-
-            string text = captured.ToString().Trim();
-
-            if (text.Length > 0)
-            {
-                // Wrapped, because the captured text is the delete engine's own output
-                // -- it starts with "roboc:" and carries no mark of its own, so on its
-                // own it was the one dialog in the program that did not look like the
-                // others. The engine's words are kept verbatim underneath.
-                ReportProblem(
-                    true,
-                    Lang.Pick($"⚠️彻底删除失败：\r\n\r\n{text}", $"⚠️Permanent delete failed:\r\n\r\n{text}"),
-                    Lang.Pick("彻底删除失败", "Permanent Delete Failed"));
-                return exitCode;
-            }
-
-            return exitCode;
-        }
-        finally
-        {
-            Console.SetError(originalError);
-        }
+        // Hand straight over, and let the delete path do its own reporting.
+        //
+        // This used to capture Console.Error and show a dialog when that capture was
+        // non-empty. That condition was the bug: per-item failures never touch stderr -- the
+        // engine carries them in JobResult.Errors and PrintSummary prints them to *stdout* --
+        // so a delete that failed on every item returned 3 with an empty capture and showed
+        // the user nothing at all. Reported on 2026-10-30 against a protected folder under
+        // Program Files.
+        //
+        // DeleteCommand now reports failures itself, from the result it already holds, which
+        // is also the only place that can say which items failed and why. Keeping the capture
+        // as well would have produced a second dialog on the exception path, after the first
+        // one was dismissed.
+        return DeleteCommand.Run(new Args(forwarded));
     }
 
     /// <summary>

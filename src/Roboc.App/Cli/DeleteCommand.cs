@@ -184,6 +184,21 @@ internal static class DeleteCommand
         }
         catch (Exception ex)
         {
+            // Before the dialog, not in the finally below.
+            //
+            // A finally runs *after* its catch block, so disposing there meant the modal
+            // dialog opened first and its message loop pumped the progress window's pending
+            // creation message -- leaving a live, unclosable progress window behind the
+            // dialog. The comment that used to sit by the finally claimed the opposite
+            // order, and it was wrong.
+            //
+            // Measured on 2026-10-30 with EnumWindows: peak 2 windows, [RobocDialog] 无法彻底删除
+            // and [RobocProgress] 正在删除 at the same time. Same class as the 2026-10-15 fix,
+            // which only covered the pre-flight refusals -- those return before the window is
+            // ever started, so they never proved this path.
+            progressWindow?.Dispose();
+            progressWindow = null;
+
             // Guard refusals land here. They are the intended outcome for a
             // dangerous target, not a crash.
             string message = Lang.Pick($"操作失败：{ex.Message}", $"Failed: {ex.Message}");
@@ -223,7 +238,97 @@ internal static class DeleteCommand
             TrashStore.DrainNow();
         }
 
+        // From a menu there is no console, and the engine reports per-item failures only
+        // through PrintSummary (stdout) and JobResult.Errors. Neither reaches the user, so a
+        // delete that failed on every item used to end with exit code 3, the folder untouched
+        // and nothing on screen at all. Reported by the user on 2026-10-30 against a protected
+        // folder under Program Files; reproduced with an ACL that denies DELETE.
+        if (fromMenu && (result.FilesFailed > 0 || result.Errors.Count > 0))
+        {
+            ReportFailuresToDialog(result);
+        }
+
         return result.FilesFailed == 0 ? 0 : 3;
+    }
+
+    /// <summary>
+    /// Shows what was not deleted, and why.
+    ///
+    /// <b>Why silence was the bug.</b> Failures are carried in
+    /// <see cref="JobResult.Errors"/> and printed by <see cref="PrintSummary"/>, which writes
+    /// to stdout. A windowed invocation has no stdout, and the caller that did want to show
+    /// something looked at stderr instead -- which per-item failures never touch. So the
+    /// exit code was right and the screen was empty, which from the outside is
+    /// indistinguishable from the program doing nothing.
+    ///
+    /// <b>Why grouped instead of one line per item.</b> A refused tree contributes one entry
+    /// per file, and a failure list of eight near-identical lines says less than one line
+    /// saying "3 items: access denied". Grouping by cause also survives the case that made
+    /// this dialog necessary in the first place -- a protected folder with hundreds of files.
+    ///
+    /// <b>Why the elevation hint.</b> The most common cause of this exact report is a
+    /// protected location, and the remedy is one sentence away. It is keyed on cause rather
+    /// than on "everything failed", because a refused tree also produces one cascade entry
+    /// (the directory that is left not empty), so "every error is access denied" is never
+    /// true for the case that matters.
+    /// </summary>
+    private static void ReportFailuresToDialog(JobResult result)
+    {
+        var text = new System.Text.StringBuilder();
+
+        text.AppendLine(Lang.Pick(
+            $"⚠️彻底删除未完成：{result.FilesCopied:N0} 项已删除，{result.FilesFailed:N0} 项失败。",
+            $"⚠️Permanent delete did not finish: {result.FilesCopied:N0} removed, {result.FilesFailed:N0} failed."));
+
+        text.AppendLine();
+        text.AppendLine(Lang.Pick("失败的项目仍在原处。", "The items that failed are still where they were."));
+        text.AppendLine();
+        text.AppendLine(Lang.Pick("原因：", "Reasons:"));
+
+        List<IGrouping<(ErrorKind Kind, string Message), JobError>> groups =
+            [.. result.Errors
+                .GroupBy(e => (e.Kind, e.Message))
+                .OrderByDescending(g => g.Count())];
+
+        foreach (IGrouping<(ErrorKind Kind, string Message), JobError> group in groups.Take(6))
+        {
+            JobError first = group.First();
+
+            text.AppendLine();
+            text.AppendLine(Lang.Pick(
+                $"· {group.Count():N0} 项：{first.Message}",
+                $"· {group.Count():N0} item(s): {first.Message}"));
+            text.AppendLine($"    {first.Path}");
+        }
+
+        if (groups.Count > 6)
+        {
+            text.AppendLine();
+            text.AppendLine(Lang.Pick(
+                $"…另有 {groups.Count - 6} 类原因未显示。",
+                $"...{groups.Count - 6} more reason(s) not shown."));
+        }
+
+        if (result.Errors.Count == 0)
+        {
+            text.AppendLine();
+            text.AppendLine(Lang.Pick("（没有记录到具体原因）", "(no specific reason was recorded)"));
+        }
+
+        long denied = result.Errors.Count(e => e.Kind == ErrorKind.AccessDenied);
+
+        if (denied > 0)
+        {
+            text.AppendLine();
+            text.AppendLine(Lang.Pick(
+                $"其中 {denied:N0} 项是权限不足。受保护的位置（Program Files、Windows 等）需要以管理员身份运行 Roboc 再试一次。",
+                $"{denied:N0} of them are a missing permission. Protected locations (Program Files, Windows, ...) need Roboc to run as an administrator."));
+        }
+
+        MaintenanceCommands.ReportProblemPublic(
+            true,
+            text.ToString().TrimEnd(),
+            Lang.Pick("彻底删除失败", "Permanent Delete Failed"));
     }
 
     /// <summary>
